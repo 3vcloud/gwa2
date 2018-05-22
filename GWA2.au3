@@ -2638,36 +2638,26 @@ Func GetAgentByID($aAgentID = -2)
 	DllCall($mKernelHandle, 'int', 'ReadProcessMemory', 'int', $mGWProcHandle, 'int', $lAgentPtr, 'ptr', DllStructGetPtr($lAgentStruct), 'int', DllStructGetSize($lAgentStruct), 'int', '')
 	Return $lAgentStruct
 EndFunc   ;==>GetAgentByID
-
-;~ Description: Internal use for GetAgentByID()
-Func GetAgentPtr($aAgentID)
+Func GetAgentPtr($aAgentID) ;~ Description: Internal use for GetAgentByID() and other Agent functions
 	If IsPtr($aAgentID) Then Return $aAgentID ; Already a pointer, presume Agent Ptr.
 	Local $lOffset[3] = [0, 4 * GetAgentID($aAgentID), 0]
 	Local $lAgentStructAddress = MemoryReadPtr($mAgentBase, $lOffset)
 	Return $lAgentStructAddress[0]
 EndFunc   ;==>GetAgentPtr
-
-;~ Description: Test if an agent exists.
-Func GetAgentExists($aAgentID = -2)
-	Return (GetAgentPtr($aAgentID) > 0 And $aAgentID < GetMaxAgents())
+Func GetAgentExists($aAgentID = -2) ;~ Description: Test if an agent exists.
+	Return (GetAgentPtr($aAgentID) > 0 And GetAgentID($aAgentID) < GetMaxAgents())
 EndFunc   ;==>GetAgentExists
-
-;~ Description: Returns the target of an agent.
-Func GetTarget($aAgent = -2)
-	Local $lAgentID = GetAgentID($aAgent)
-	If Not $lAgentID Then Return 0
-	Return MemoryRead(GetValue('TargetLogBase') + 4 * $lAgentID)
+Func GetTarget($aAgent = -2) ;~ Description: Returns the target of an agent.
+	$aAgent = GetAgentID($aAgent)
+	If Not $aAgent Then Return 0
+	Return MemoryRead(GetValue('TargetLogBase') + 4 * $aAgent)
 EndFunc   ;==>GetTarget
-
-;~ Description: Returns agent by player name.
-Func GetAgentByPlayerName($aPlayerName)
+Func GetAgentByPlayerName($aPlayerName) ;~ Description: Returns agent by player name.
 	For $i = 1 To GetMaxAgents()
 		If GetPlayerName($i) = $aPlayerName Then Return GetAgentByID($i)
 	Next
 EndFunc   ;==>GetAgentByPlayerName
-
-;~ Description: Returns agent by name.
-Func GetAgentByName($aName)
+Func GetAgentByName($aName) ;~ Description: Returns agent by name.
 	Local $lName, $lAddress
 
 	For $i = 1 To GetMaxAgents()
@@ -2691,204 +2681,123 @@ Func GetAgentByName($aName)
 		If StringInStr($lName, $aName) > 0 Then Return GetAgentByID($i)
 	Next
 EndFunc   ;==>GetAgentByName
-
-;~ Description: Returns the nearest agent to an agent.
-Func GetNearestAgentToAgent($aAgent = -2,$lAgentArray=0)
-	Local $lNearestAgent, $lNearestDistance = 100000000
-	Local $lDistance
-	If $lAgentArray = 0 Then $lAgentArray = GetAgentArray()
-	$aAgent = GetAgentPtr($aAgent)
-	Local $lID = GetAgentID($aAgent)
-	For $i = 1 To $lAgentArray[0]
-		$lDitance = GetDistance($aAgent,$lAgentArray[$i])
-		$lDistance = (DllStructGetData($aAgent, 'X') - DllStructGetData($lAgentArray[$i], 'X')) ^ 2 + (DllStructGetData($aAgent, 'Y') - DllStructGetData($lAgentArray[$i], 'Y')) ^ 2
-
-		If $lDistance < $lNearestDistance Then
-			If DllStructGetData($lAgentArray[$i], 'ID') == $lID Then ContinueLoop
-			$lNearestAgent = $lAgentArray[$i]
-			$lNearestDistance = $lDistance
-		EndIf
-	Next
-
-	SetExtended(Sqrt($lNearestDistance))
-	Return $lNearestAgent
+Func GetNearestAgentToAgent($aAgent = -2,$lAgentArray=0) ;~ Description: Returns the nearest agent to an agent.
+	Local $lAgentCoords = GetAgentXY($aAgent)
+	Return GetNearestAgentToCoords($lAgentCoords[0],$lAgentCoords[1],$lAgentArray,GetAgentID($aAgent))
 EndFunc   ;==>GetNearestAgentToAgent
-
-;~ Description: Returns the nearest enemy to an agent.
-Func GetNearestEnemyToAgent($aAgent = -2)
+Func GetNearestEnemyToAgent($aAgent = -2) ;~ Description: Returns the nearest enemy to an agent.
 	Local $lNearestAgent, $lNearestDistance = 100000000
 	Local $lDistance
 	Local $lAgentArray = GetAgentArray(0xDB)
 
-	If Not IsDllStruct($aAgent) Then $aAgent = GetAgentByID($aAgent)
-
-	Local $lID = DllStructGetData($aAgent, 'ID')
-
+	If IsNumber($aAgent) Then $aAgent = GetAgentPtr($aAgent)
+	Local $lAgentID = GetAgentID($aAgent)
+	If Not $lAgentID Then Return 0
+	Local $lAgent1XY= GetAgentXY($lAgentArray[$i])
 	For $i = 1 To $lAgentArray[0]
-		If DllStructGetData($lAgentArray[$i], 'Allegiance') <> 3 Then ContinueLoop
-		If DllStructGetData($lAgentArray[$i], 'HP') <= 0 Then ContinueLoop
-		If BitAND(DllStructGetData($lAgentArray[$i], 'Effects'), 0x0010) > 0 Then ContinueLoop
-		$lDistance = (DllStructGetData($aAgent, 'X') - DllStructGetData($lAgentArray[$i], 'X')) ^ 2 + (DllStructGetData($aAgent, 'Y') - DllStructGetData($lAgentArray[$i], 'Y')) ^ 2
-		If $lDistance < $lNearestDistance Then
-			If DllStructGetData($lAgentArray[$i], 'ID') == $lID Then ContinueLoop
-			$lNearestAgent = $lAgentArray[$i]
-			$lNearestDistance = $lDistance
-		EndIf
+		If GetAgentID($lAgentArray[0]) == $lAgentID Then ContinueLoop
+		If Not GetIsEnemy($lAgentArray[$i]) Then ContinueLoop ; Not an enemy
+		If Not GetIsAlive($lAgentArray[$i]) Then ContinueLoop ; Is not alive
+		Local $lAgent2XY= GetAgentXY($lAgentArray[$i])
+		$lDistance = ComputePseudoDistance($lAgent1XY[0],$lAgent1XY[1],$lAgent2XY[0],$lAgent2XY[1])
+		If $lDistance > $lNearestDistance Then ContinueLoop
+		$lNearestAgent = $lAgentArray[$i]
+		$lNearestDistance = $lDistance
 	Next
 
 	SetExtended(Sqrt($lNearestDistance))
 	Return $lNearestAgent
 EndFunc   ;==>GetNearestEnemyToAgent
-
-;~ Description: Returns the nearest agent to a set of coordinates.
-Func GetNearestAgentToCoords($aX, $aY)
+Func GetNearestAgentToCoords($aX, $aY, $lAgentArray=0, $aExcludeAgentID=0) ;~ Description: Returns the nearest agent to a set of coordinates. Add aExcludeAgentID to exclude current player, for example.
 	Local $lNearestAgent, $lNearestDistance = 100000000
 	Local $lDistance
-	Local $lAgentArray = GetAgentArray()
+	If $lAgentArray = 0 Then $lAgentArray = GetAgentArray()
 
 	For $i = 1 To $lAgentArray[0]
-		$lDistance = ($aX - DllStructGetData($lAgentArray[$i], 'X')) ^ 2 + ($aY - DllStructGetData($lAgentArray[$i], 'Y')) ^ 2
-		If $lDistance < $lNearestDistance Then
-			$lNearestAgent = $lAgentArray[$i]
-			$lNearestDistance = $lDistance
-		EndIf
+		If $aExcludeAgentID And GetAgentID($lAgentArray[$i]) == $aExcludeAgentID Then ContinueLoop
+		Local $lAgentCoords= GetAgentXY($lAgentArray[$i])
+		$lDistance = ComputePseudoDistance($aX,$aY,$lAgentCoords[0],$lAgentCoords[1])
+		If $lDistance > $lNearestDistance Then ContinueLoop
+		$lNearestAgent = $lAgentArray[$i]
+		$lNearestDistance = $lDistance
 	Next
-
 	SetExtended(Sqrt($lNearestDistance))
 	Return $lNearestAgent
 EndFunc   ;==>GetNearestAgentToCoords
-
-;~ Description: Returns the nearest signpost to an agent.
-Func GetNearestSignpostToAgent($aAgent = -2)
-	Local $lNearestAgent, $lNearestDistance = 100000000
-	Local $lDistance
-	Local $lAgentArray = GetAgentArray(0x200)
-
-	If IsDllStruct($aAgent) = 0 Then $aAgent = GetAgentByID($aAgent)
-
-	Local $lID = DllStructGetData($aAgent, 'ID')
-
-	For $i = 1 To $lAgentArray[0]
-		$lDistance = (DllStructGetData($lAgentArray[$i], 'Y') - DllStructGetData($aAgent, 'Y')) ^ 2 + (DllStructGetData($lAgentArray[$i], 'X') - DllStructGetData($aAgent, 'X')) ^ 2
-		If $lDistance < $lNearestDistance Then
-			If DllStructGetData($lAgentArray[$i], 'ID') == $lID Then ContinueLoop
-			$lNearestAgent = $lAgentArray[$i]
-			$lNearestDistance = $lDistance
-		EndIf
-	Next
-
-	SetExtended(Sqrt($lNearestDistance))
-	Return $lNearestAgent
+Func GetNearestSignpostToAgent($aAgent = -2) ;~ Description: Returns the nearest signpost to an agent.
+	Local $lAgentCoords = GetAgentXY($aAgent)
+	Return GetNearestSignpostToCoords($lAgentCoords[0],$lAgentCoords[1])
 EndFunc   ;==>GetNearestSignpostToAgent
-
-;~ Description: Returns the nearest signpost to a set of coordinates.
-Func GetNearestSignpostToCoords($aX, $aY)
+Func GetNearestSignpostToCoords($aX, $aY);~ Description: Returns the nearest signpost to a set of coordinates.
 	Local $lNearestAgent, $lNearestDistance = 100000000
 	Local $lDistance
 	Local $lAgentArray = GetAgentArray(0x200)
 
 	For $i = 1 To $lAgentArray[0]
-		$lDistance = ($aX - DllStructGetData($lAgentArray[$i], 'X')) ^ 2 + ($aY - DllStructGetData($lAgentArray[$i], 'Y')) ^ 2
-
-		If $lDistance < $lNearestDistance Then
-			$lNearestAgent = $lAgentArray[$i]
-			$lNearestDistance = $lDistance
-		EndIf
+		Local $lAgentCoords= GetAgentXY($lAgentArray[$i])
+		$lDistance = ComputePseudoDistance($aX,$aY,$lAgentCoords[0],$lAgentCoords[1])
+		If $lDistance > $lNearestDistance Then ContinueLoop
+		$lNearestAgent = $lAgentArray[$i]
+		$lNearestDistance = $lDistance
 	Next
-
 	SetExtended(Sqrt($lNearestDistance))
 	Return $lNearestAgent
 EndFunc   ;==>GetNearestSignpostToCoords
-
-;~ Description: Returns the nearest NPC to an agent.
-Func GetNearestNPCToAgent($aAgent = -2)
-	Local $lNearestAgent, $lNearestDistance = 100000000
-	Local $lDistance
-	Local $lAgentArray = GetAgentArray(0xDB)
-
-	If Not IsDllStruct($aAgent) Then $aAgent = GetAgentByID($aAgent)
-
-	Local $lID = DllStructGetData($aAgent, 'ID')
-
-	For $i = 1 To $lAgentArray[0]
-		If DllStructGetData($lAgentArray[$i], 'Allegiance') <> 6 Then ContinueLoop
-		If DllStructGetData($lAgentArray[$i], 'HP') <= 0 Then ContinueLoop
-		If BitAND(DllStructGetData($lAgentArray[$i], 'Effects'), 0x0010) > 0 Then ContinueLoop
-
-		$lDistance = (DllStructGetData($aAgent, 'X') - DllStructGetData($lAgentArray[$i], 'X')) ^ 2 + (DllStructGetData($aAgent, 'Y') - DllStructGetData($lAgentArray[$i], 'Y')) ^ 2
-		If $lDistance < $lNearestDistance Then
-			If DllStructGetData($lAgentArray[$i], 'ID') == $lID Then ContinueLoop
-			$lNearestAgent = $lAgentArray[$i]
-			$lNearestDistance = $lDistance
-		EndIf
-	Next
-
-	SetExtended(Sqrt($lNearestDistance))
-	Return $lNearestAgent
+Func GetNearestNPCToAgent($aAgent = -2) ;~ Description: Returns the nearest NPC to an agent.
+	Local $lAgentCoords = GetAgentXY($aAgent)
+	Return GetNearestNPCToCoords($lAgentCoords[0],$lAgentCoords[1],GetAgentArray(0xDB),GetAgentID($aAgent))
 EndFunc   ;==>GetNearestNPCToAgent
-
-;~ Description: Returns the nearest NPC to a set of coordinates.
-Func GetNearestNPCToCoords($aX, $aY)
+Func GetNearestNPCToCoords($aX, $aY, $lAgentArray=0, $aExcludeAgentID=0) ;~ Description: Returns the nearest NPC to a set of coordinates. Add aExcludeAgentID to exclude current player, for example.
 	Local $lNearestAgent, $lNearestDistance = 100000000
 	Local $lDistance
-	Local $lAgentArray = GetAgentArray(0xDB)
+	If $lAgentArray = 0 Then $lAgentArray = GetAgentArray(0xDB)
 
 	For $i = 1 To $lAgentArray[0]
-		If DllStructGetData($lAgentArray[$i], 'Allegiance') <> 6 Then ContinueLoop
-		If DllStructGetData($lAgentArray[$i], 'HP') <= 0 Then ContinueLoop
-		If BitAND(DllStructGetData($lAgentArray[$i], 'Effects'), 0x0010) > 0 Then ContinueLoop
-
-		$lDistance = ($aX - DllStructGetData($lAgentArray[$i], 'X')) ^ 2 + ($aY - DllStructGetData($lAgentArray[$i], 'Y')) ^ 2
-
-		If $lDistance < $lNearestDistance Then
-			$lNearestAgent = $lAgentArray[$i]
-			$lNearestDistance = $lDistance
-		EndIf
+		If GetAllegiance($lAgentArray[$i]) <> 6 Then ContinueLoop
+		If Not GetIsAlive($lAgentArray[$i]) Then ContinueLoop
+		If $aExcludeAgentID And $aExcludeAgentID = GetAgentID($lAgentArray[$i]) Then ContinueLoop
+		Local $lAgentCoords= GetAgentXY($lAgentArray[$i])
+		$lDistance = ComputePseudoDistance($aX,$aY,$lAgentCoords[0],$lAgentCoords[1])
+		If $lDistance > $lNearestDistance Then ContinueLoop
+		$lNearestAgent = $lAgentArray[$i]
+		$lNearestDistance = $lDistance
 	Next
-
 	SetExtended(Sqrt($lNearestDistance))
 	Return $lNearestAgent
 EndFunc   ;==>GetNearestNPCToCoords
-
-;~ Description: Returns the nearest item to an agent.
-Func GetNearestItemToAgent($aAgent = -2, $aCanPickUp = True)
+Func GetNearestItemToAgent($aAgent = -2, $aCanPickUp = True) ;~ Description: Returns the nearest item to an agent.
+	Local $lAgentCoords = GetAgentXY($aAgent)
+	Return GetNearestNPCToCoords($lAgentCoords[0],$lAgentCoords[1],$aCanPickUp,GetAgentArray(0x400),GetAgentID($aAgent))
+EndFunc   ;==>GetNearestItemToAgent
+Func GetNearestItemToCoords($aX, $aY, $aCanPickUp = True, $lAgentArray=0, $aExcludeAgentID=0) ;~ Description: Returns the nearest Item to a set of coordinates. Add aExcludeAgentID to exclude another item, for example.
 	Local $lNearestAgent, $lNearestDistance = 100000000
 	Local $lDistance
-	Local $lAgentArray = GetAgentArray(0x400)
-
-	If Not IsDllStruct($aAgent) Then $aAgent = GetAgentByID($aAgent)
-
-	Local $lID = DllStructGetData($aAgent, 'ID')
+	If $lAgentArray = 0 Then $lAgentArray = GetAgentArray(0x400)
 
 	For $i = 1 To $lAgentArray[0]
-
-		If $aCanPickUp And Not GetCanPickUp($lAgentArray[$i]) Then ContinueLoop
-		$lDistance = (DllStructGetData($aAgent, 'X') - DllStructGetData($lAgentArray[$i], 'X')) ^ 2 + (DllStructGetData($aAgent, 'Y') - DllStructGetData($lAgentArray[$i], 'Y')) ^ 2
-		If $lDistance < $lNearestDistance Then
-			If DllStructGetData($lAgentArray[$i], 'ID') == $lID Then ContinueLoop
-			$lNearestAgent = $lAgentArray[$i]
-			$lNearestDistance = $lDistance
-		EndIf
+		If $aCanPickUp And Not GetCanPickUp($lAgentArray[$i]) Then ContinueLoop ; Can't pick up.
+		If $aExcludeAgentID And $aExcludeAgentID = GetAgentID($lAgentArray[$i]) Then ContinueLoop
+		Local $lAgentCoords= GetAgentXY($lAgentArray[$i])
+		$lDistance = ComputePseudoDistance($aX,$aY,$lAgentCoords[0],$lAgentCoords[1])
+		If $lDistance > $lNearestDistance Then ContinueLoop
+		$lNearestAgent = $lAgentArray[$i]
+		$lNearestDistance = $lDistance
 	Next
-
 	SetExtended(Sqrt($lNearestDistance))
 	Return $lNearestAgent
-EndFunc   ;==>GetNearestItemToAgent
-
-;~ Description: Returns array of party members
+EndFunc   ;==>GetNearestItemToCoords
 ;~ Param: an array returned by GetAgentArray. This is totally optional, but can greatly improve script speed.
-Func GetParty($aAgentArray = 0)
-	Local $lReturnArray[1] = [0]
+Func GetParty($aAgentArray = 0) ;~ Description: Returns array of party members
+	Local $lReturnArray[17]
+	$lReturnArray[0] = 0
 	If $aAgentArray==0 Then $aAgentArray = GetAgentArray(0xDB)
 	For $i = 1 To $aAgentArray[0]
-		If DllStructGetData($aAgentArray[$i], 'Allegiance') == 1 Then
-			If BitAND(DllStructGetData($aAgentArray[$i], 'TypeMap'), 131072) Then
-				$lReturnArray[0] += 1
-				ReDim $lReturnArray[$lReturnArray[0] + 1]
-				$lReturnArray[$lReturnArray[0]] = $aAgentArray[$i]
-			EndIf
-		EndIf
+		If GetAllegiance($aAgentArray[$i]) <> 1 Then ContinueLoop
+		If Not BitAND(GetTypeMap($aAgentArray[$i]), 131072) Then ContinueLoop
+		$lReturnArray[0] += 1
+		$lReturnArray[$lReturnArray[0]] = $aAgentArray[$i]
 	Next
+	ReDim $lReturnArray[$lReturnArray[0] + 1]
 	Return $lReturnArray
 EndFunc   ;==>GetParty
 
@@ -2919,7 +2828,6 @@ Func GetAgentArray($aType = 0)
 	Next
 	Return $lReturnArray
 EndFunc   ;==>GetAgentArray
-
 Func GetPartySize()
     Local $lSize = 0, $lReturn
     Local $lOffset[5] = [0, 0x18, 0x4C, 0x54, 0]
@@ -2930,75 +2838,72 @@ Func GetPartySize()
     Next
     Return $lSize
 EndFunc
-
-;~ Description Returns the "danger level" of each party member
-;~ Param1: an array returned by GetAgentArray(). This is totally optional, but can greatly improve script speed.
-;~ Param2: an array returned by GetParty() This is totally optional, but can greatly improve script speed.
-Func GetPartyDanger($aAgentArray = 0, $aParty = 0)
+Func GetPartyDanger($aAgentArray = 0, $aParty = 0) ;~ Description Returns the "danger level" of each party member
+	;~ Param1: an array returned by GetAgentArray(). This is totally optional, but can greatly improve script speed.
+	;~ Param2: an array returned by GetParty() This is totally optional, but can greatly improve script speed.
 	If $aAgentArray == 0 Then $aAgentArray = GetAgentArray(0xDB)
+	$aAgentArray = AgentArrayFilter($aAgentArray,0xDB,True,True) ; Filter agent array to only bring back enemies who are alive.
 	If $aParty == 0 Then $aParty = GetParty($aAgentArray)
 	
 	Local $lReturnArray[$aParty[0]+1]
 	$lReturnArray[0] = $aParty[0]
-	For $i=1 To $lReturnArray[0]
-		$lReturnArray[$i] = 0
-	Next
 	For $j=1 To $aParty[0]
 		$lReturnArray[$i] = GetAgentDanger($aParty[$i],$aAgentArray)
 	Next
 	Return $lReturnArray
-
-	For $i=1 To $aAgentArray[0]
-		If BitAND(DllStructGetData($aAgentArray[$i], 'Effects'), 0x0010) > 0 Then ContinueLoop
-		If DllStructGetData($aAgentArray[$i], 'HP') <= 0 Then ContinueLoop
-		If Not GetIsLiving($aAgentArray[$i]) Then ContinueLoop
-		Local $lAgentAllegiance = DllStructGetData($aAgentArray[$i], "Allegiance")
-		If $lAgentAllegiance > 3 Then ContinueLoop	; ignore NPCs, spirits, minions, pets
-		Local $lAgentTarget = GetTarget(DllStructGetData($aAgentArray[$i], "ID"))
-		Local $lAgentTeam = DllStructGetData($aAgentArray[$i], "Team")
-		
-		For $j=1 To $aParty[0]
-			If $lAgentTarget <> DllStructGetData($aParty[$j], "ID") Then ContinueLoop ; Player not targeted by this agent
-			If GetDistance($aAgentArray[$i], $aParty[$j]) > 4999 Then ContinueLoop ; Player not in agent range
-			If $lAgentTeam Then
-				If $lAgentTeam <> DllStructGetData($aParty[$j], "Team") Then $lReturnArray[$j] += 1 ; Player on enemy team of this agent
-			ElseIf $lAgentAllegiance <> DllStructGetData($aParty[$j], "Allegiance") Then
-				$lReturnArray[$j] += 1 ; Player is enemy of this agent.
-			EndIf
-		Next
-	Next
-	Return $lReturnArray
 EndFunc
-;~ Description: Return the number of enemy agents targeting the given agent.
-Func GetAgentDanger($aAgent = -2, $aAgentArray = 0)
-	If IsDllStruct($aAgent) = 0 Then
-		$aAgent = GetAgentByID($aAgent)
-	EndIf
+Func GetAgentDanger($aAgent = -2, $aAgentArray = 0) ;~ Description: Return the number of enemy agents targeting the given agent.
+	$aAgent = GetAgentByID($aAgent)
+	Local $lAgentID = GetAgentID($aAgent)
 	Local $lCount = 0
+	Local $lTeam = GetTeam($aAgent)
+	Local $lAllegiance = GetAllegiance($aAgent)
 	If $aAgentArray == 0 Then $aAgentArray = GetAgentArray(0xDB) ; Get all living agents
 	For $i=1 To $aAgentArray[0]
-		If BitAND(DllStructGetData($aAgentArray[$i], 'Effects'), 0x0010) > 0 Then ContinueLoop
-		If DllStructGetData($aAgentArray[$i], 'HP') <= 0 Then ContinueLoop
-		If Not GetIsLiving($aAgentArray[$i]) Then ContinueLoop
-		If DllStructGetData($aAgentArray[$i], "Allegiance") > 3 Then ContinueLoop	; ignore NPCs, spirits, minions, pets
-		If GetTarget(DllStructGetData($aAgentArray[$i], "ID")) == DllStructGetData($aAgent, "ID") Then
-			If GetDistance($aAgentArray[$i], $aAgent) < 5000 Then
-				If DllStructGetData($aAgentArray[$i], "Team") <> 0 Then
-					If DllStructGetData($aAgentArray[$i], "Team") <> DllStructGetData($aAgent, "Team") Then
-						$lCount += 1
-					EndIf
-				ElseIf DllStructGetData($aAgentArray[$i], "Allegiance") <> DllStructGetData($aAgent, "Allegiance") Then
-					$lCount += 1
-				EndIf
-			EndIf
+		If Not GetIsAlive($aAgentArray[$i]) Then ContinueLoop ; Not alive
+		Local $iAllegiance = GetAllegiance($aAgentArray[$i])
+		If $lAllegiance > 3 Then ContinueLoop						; ignore NPCs, spirits, minions, pets
+		Local $iAgentID = GetAgentID($aAgentArray[$i])
+		If GetTarget($iAgentID) <> $lAgentID Then ContinueLoop 		; Not targeted.
+		If GetDistance($aAgentArray[$i], $aAgent) > 4999 Then ContinueLoop ; Too far away to be dangerous
+		If $lTeam Then
+			If GetTeam($aAgentArray[$i]) <> $lTeam Then $lCount += 1
+		ElseIf $lAllegiance <> $iAllegiance Then
+			$lCount += 1
 		EndIf
 	Next
 	Return $lCount
 EndFunc
+Func AgentArrayFilter($aAgentArray,$lType=Default,$aIsAlive=Default,$aIsEnemy=Default,$aAllegiance=Default) ;~ Description: Pre-emptively filters an existing Agent Array. Used for internal functions for speed.
+	Local $lStartSize = $aAgentArray[0]
+	Local $lNewArray[$lStartSize + 1]
+	$lNewArray[0] = 0
+	For $i=0 To $lStartSize
+		If $aIsAlive <> Default And Not (GetIsAlive($aAgentArray[$i]) = $aIsAlive) Then ContinueLoop
+		If $lType <> Default And Not (GetAgentType($aAgentArray[$i]) = $lType) Then ContinueLoop
+		If $aIsEnemy <> Default And Not (GetIsEnemy($aAgentArray[$i]) = $aIsEnemy) Then ContinueLoop
+		If $aAllegiance <> Default And Not (GetAllegiance($aAgentArray[$i]) = $aAllegiance) Then ContinueLoop
+		$lNewArray[0] += 1
+		$lNewArray[$lNewArray[0]] = $aAgentArray[$i]
+	Next
+	If $aAgentArray[0] == $lNewArray[0] Then Return $aAgentArray
+	ReDim $lNewArray[$lNewArray[0] + 1]
+	Return $lNewArray
+EndFunc
 #EndRegion Agent
 
 #Region AgentInfo
-Func GetAgentPos($aAgent = -2)
+Func GetAgentX($aAgent = -2) ;~ Description: Get Agent X Co-ordinate
+	If IsNumber($aAgent) Then $aAgent = GetAgentPtr($aAgent)
+	If IsPtr($aAgent) Then Return MemoryRead($aAgent + 116, 'float')
+	If IsDllStruct($aAgent) Then Return DllStructGetData($aAgent, 'X')
+EndFunc
+Func GetAgentY($aAgent = -2) ;~ Description: Get Agent Y Co-ordinate
+	If IsNumber($aAgent) Then $aAgent = GetAgentPtr($aAgent)
+	If IsPtr($aAgent) Then Return MemoryRead($aAgent + 120, 'float')
+	If IsDllStruct($aAgent) Then Return DllStructGetData($aAgent, 'Y')
+EndFunc
+Func GetAgentXY($aAgent = -2) ;~ Description: Get Agent X and Y value as Array
 	If IsNumber($aAgent) Then $aAgent = GetAgentPtr($aAgent)
 	If IsPtr($aAgent) Then $aAgent = MemoryReadStruct($aAgentPtr + 116,'float X;float Y')
 	Local $xy[2] = [0,0]
@@ -3008,12 +2913,22 @@ Func GetAgentPos($aAgent = -2)
 	EndIf
 	Return $xy
 EndFunc
-Func GetAgentEffects($aAgent = -2)
+Func GetAgentEffects($aAgent = -2) ;~ Description: Get Agent Effects value
 	If IsNumber($aAgent) Then $aAgent = GetAgentPtr($aAgent)
 	If IsPtr($aAgent) Then Return MemoryRead($aAgent + 312, 'long')
 	If IsDllStruct($aAgent) Then Return DllStructGetData($aAgent, 'Effects')
 EndFunc
-Func GetAgentMove($aAgent = -2)
+Func GetAgentMoveX($aAgent = -2) ;~ Description: Get Agent MoveX value
+	If IsNumber($aAgent) Then $aAgent = GetAgentPtr($aAgent)
+	If IsPtr($aAgent) Then Return MemoryRead($aAgent + 160, 'float')
+	If IsDllStruct($aAgent) Then Return DllStructGetData($aAgent, 'MoveX')
+EndFunc
+Func GetAgentMoveY($aAgent = -2) ;~ Description: Get Agent MoveY value
+	If IsNumber($aAgent) Then $aAgent = GetAgentPtr($aAgent)
+	If IsPtr($aAgent) Then Return MemoryRead($aAgent + 164, 'float')
+	If IsDllStruct($aAgent) Then Return DllStructGetData($aAgent, 'MoveY')
+EndFunc
+Func GetAgentMoveXY($aAgent = -2) ;~ Description: Get Agent MoveX and MoveY value as Array
 	If IsNumber($aAgent) Then $aAgent = GetAgentPtr($aAgent)
 	If IsPtr($aAgent) Then $aAgent = MemoryReadStruct($aAgentPtr + 160,'float MoveX;float MoveY')
 	Local $xy[2] = [0,0]
@@ -3023,58 +2938,63 @@ Func GetAgentMove($aAgent = -2)
 	EndIf
 	Return $xy
 EndFunc
-Func GetAgentType($aAgent = -2)
+Func GetAllegiance($aAgent = -2) ;~ Description: Get Agent allegiance
+	If IsNumber($aAgent) Then $aAgent = GetAgentPtr($aAgent)
+	If IsPtr($aAgent) Then Return MemoryRead($aAgent + 433, 'byte')
+	If IsDllStruct($aAgent) Then Return DllStructGetData($aAgent, 'Allegiance')
+EndFunc
+Func GetHP($aAgent = -2) ;~ Description: Get Agent HP percent, as decimal value
+	If IsNumber($aAgent) Then $aAgent = GetAgentPtr($aAgent)
+	If IsPtr($aAgent) Then Return MemoryRead($aAgent + 304, 'float')
+	If IsDllStruct($aAgent) Then Return DllStructGetData($aAgent, 'HP')
+EndFunc
+Func GetAgentType($aAgent = -2)  ;~ Description: Get Agent Type value
 	If IsNumber($aAgent) Then $aAgent = GetAgentPtr($aAgent)
 	If IsPtr($aAgent) Then Return MemoryRead($aAgent + 156, 'long')
 	If IsDllStruct($aAgent) Then Return DllStructGetData($aAgent, 'Type')
 EndFunc
-Func GetModelState($aAgent = -2)
+Func GetModelState($aAgent = -2)  ;~ Description: Get Agent ModelState value
 	If IsNumber($aAgent) Then $aAgent = GetAgentPtr($aAgent)
 	If IsPtr($aAgent) Then Return MemoryRead($aAgent + 340, 'long')
 	If IsDllStruct($aAgent) Then Return DllStructGetData($aAgent, 'ModelState')
 EndFunc
-;~ Description: Returns the ID of an agent.
-Func GetAgentID($aAgent)
+Func GetTypeMap($aAgent) ;~ Description: Get Agent TypeMap value
+	If IsNumber($aAgent) Then $aAgent = GetAgentPtr($aAgent)
+	If IsPtr($aAgent) Then Return MemoryRead($aAgent + 374, 'long')
+	If IsDllStruct($aAgent) Then Return DllStructGetData($aAgent, 'TypeMap')
+EndFunc
+Func GetAgentID($aAgent) ;~ Description: Returns the ID of an agent.
 	If IsNumber($aAgent) Then Return ConvertID($aAgent)
 	If IsPtr($aAgent) Then Return MemoryRead($aAgent + 44, 'long')
 	If IsDllStruct($aAgent) Then Return DllStructGetData($aAgent, 'ID')
-EndFunc   ;==>GetAgentID
-;~ Description: Tests if an agent is living.
-Func GetIsLiving($aAgent = -2)
+EndFunc
+Func GetIsLiving($aAgent = -2) ;~ Description: Tests if an agent is living.
 	Return GetAgentType($aAgent) = 0xDB
 EndFunc   ;==>GetIsLiving
-;~ Description: Tests if an agent is a signpost/chest/etc.
-Func GetIsStatic($aAgent)
+Func GetIsStatic($aAgent) ;~ Description: Tests if an agent is a signpost/chest/etc.
 	Return GetAgentType($aAgent) = 0x200
 EndFunc   ;==>GetIsStatic
-;~ Description: Tests if an agent is an item.
-Func GetIsMovable($aAgent)
+Func GetIsMovable($aAgent) ;~ Description: Tests if an agent is an item.
 	Return GetAgentType($aAgent) = 0x400
 EndFunc   ;==>GetIsMovable
-;~ Description: Returns energy of an agent. (Only self/heroes)
-Func GetEnergy($aAgent = -2)
+Func GetEnergy($aAgent = -2) ;~ Description: Returns energy of an agent. (Only self/heroes)
 	If IsNumber($aAgent) Then $aAgent = GetAgentPtr($aAgent)
 	If IsPtr($aAgent) Then $aAgent = MemoryReadStruct($aAgent + 284, 'float EnergyPercent;long MaxEnergy')
 	If IsDllStruct($aAgent) Then Return DllStructGetData($aAgent, 'EnergyPercent') * DllStructGetData($aAgent, 'MaxEnergy')
 EndFunc   ;==>GetEnergy
-;~ Description: Returns health of an agent. (Must have caused numerical change in health)
-Func GetHealth($aAgent = -2)
+Func GetHealth($aAgent = -2) ;~ Description: Returns health of an agent. (Must have caused numerical change in health)
 	If IsNumber($aAgent) Then $aAgent = GetAgentPtr($aAgent)
 	If IsPtr($aAgent) Then $aAgent = MemoryReadStruct($aAgent + 304, 'float HP;long MaxHP')
 	If IsDllStruct($aAgent) Then Return DllStructGetData($aAgent, 'HP') * DllStructGetData($aAgent, 'MaxHP')
 EndFunc   ;==>GetHealth
-;~ Description: Tests if an agent is moving.
-Func GetIsMoving($aAgent = -2)
+Func GetIsMoving($aAgent = -2) ;~ Description: Tests if an agent is moving.
 	Local $xy = GetAgentMove($aAgent)
 	Return $xy[0] <> 0 Or $xy[1] <> 0
 EndFunc   ;==>GetIsMoving
-;~ Description: Tests if an agent is knocked down.
-Func GetIsKnocked($aAgent = -2)
+Func GetIsKnocked($aAgent = -2) ;~ Description: Tests if an agent is knocked down.
 	Return GetModelState($aAgent) = 0x450
 EndFunc   ;==>GetIsKnocked
-
-;~ Description: Tests if an agent is attacking.
-Func GetIsAttacking($aAgent = -2)
+Func GetIsAttacking($aAgent = -2) ;~ Description: Tests if an agent is attacking.
 	Switch GetModelState($aAgent)
 		Case 0x60 ; Is Attacking
 			Return True
@@ -3085,75 +3005,58 @@ Func GetIsAttacking($aAgent = -2)
 	EndSwitch
 	Return False
 EndFunc   ;==>GetIsAttacking
-
-;~ Description: Tests if an agent is casting.
-Func GetIsCasting($aAgent = -2)
+Func GetIsCasting($aAgent = -2) ;~ Description: Tests if an agent is casting.
 	If IsDllStruct($aAgent) = 0 Then $aAgent = GetAgentByID($aAgent)
 	Return DllStructGetData($aAgent, 'Skill') <> 0
 EndFunc   ;==>GetIsCasting
-
-;~ Description: Tests if an agent is bleeding.
-Func GetIsBleeding($aAgent = -2)
+Func GetIsBleeding($aAgent = -2) ;~ Description: Tests if an agent is bleeding.
 	Return BitAND(GetAgentEffects($aAgent), 0x0001) > 0
 EndFunc   ;==>GetIsBleeding
-
-;~ Description: Tests if an agent has a condition.
-Func GetHasCondition($aAgent = -2)
+Func GetHasCondition($aAgent = -2) ;~ Description: Tests if an agent has a condition.
 	Return BitAND(GetAgentEffects($aAgent), 0x0002) > 0
 EndFunc   ;==>GetHasCondition
-
-;~ Description: Tests if an agent is dead.
-Func GetIsDead($aAgent = -2)
+Func GetIsEnemy($aAgent = -1) ;~ Description: Tests if an agent is an enemy to the player
+	Return GetAllegiance($aAgent) == 3
+EndFunc
+Func GetIsAlive($aAgent = -2) ;~ Description: Tests if an agent is alive i.e. NOT dead, has at least 1 HP, and is able to "live"
+	$aAgent = GetAgentPtr($aAgent)
+	Return Not GetIsDead($aAgent) And GetHP($aAgent) > 0 And GetIsLiving($aAgent)
+EndFunc
+Func GetIsDead($aAgent = -2) ;~ Description: Tests if an agent is dead.
 	Return BitAND(GetAgentEffects($aAgent), 0x0010) > 0
 EndFunc   ;==>GetIsDead
-
-;~ Description: Tests if an agent has a deep wound.
-Func GetHasDeepWound($aAgent = -2)
+Func GetHasDeepWound($aAgent = -2) ;~ Description: Tests if an agent has a deep wound.
 	Return BitAND(GetAgentEffects($aAgent), 0x0020) > 0
 EndFunc   ;==>GetHasDeepWound
-
-;~ Description: Tests if an agent is poisoned.
-Func GetIsPoisoned($aAgent = -2)
+Func GetIsPoisoned($aAgent = -2) ;~ Description: Tests if an agent is poisoned.
 	Return BitAND(GetAgentEffects($aAgent), 0x0040) > 0
 EndFunc   ;==>GetIsPoisoned
-
-;~ Description: Tests if an agent is enchanted.
-Func GetIsEnchanted($aAgent = -2)
+Func GetIsEnchanted($aAgent = -2) ;~ Description: Tests if an agent is enchanted.
 	Return BitAND(GetAgentEffects($aAgent), 0x0080) > 0
 EndFunc   ;==>GetIsEnchanted
-
-;~ Description: Tests if an agent has a degen hex.
-Func GetHasDegenHex($aAgent = -2)
+Func GetHasDegenHex($aAgent = -2) ;~ Description: Tests if an agent has a degen hex.
 	Return BitAND(GetAgentEffects($aAgent), 0x0400) > 0
 EndFunc   ;==>GetHasDegenHex
-
-;~ Description: Tests if an agent is hexed.
-Func GetHasHex($aAgent = -2)
+Func GetHasHex($aAgent = -2) ;~ Description: Tests if an agent is hexed.
 	Return BitAND(GetAgentEffects($aAgent), 0x0800) > 0
 EndFunc   ;==>GetHasHex
-
-;~ Description: Tests if an agent has a weapon spell.
-Func GetHasWeaponSpell($aAgent = -2)
+Func GetHasWeaponSpell($aAgent = -2) ;~ Description: Tests if an agent has a weapon spell.
 	Return BitAND(GetAgentEffects($aAgent), 0x8000) > 0
 EndFunc   ;==>GetHasWeaponSpell
-
-;~ Description: Tests if an agent is a boss.
-Func GetIsBoss($aAgent)
-	If IsDllStruct($aAgent) = 0 Then $aAgent = GetAgentByID($aAgent)
-	Return BitAND(DllStructGetData($aAgent, 'TypeMap'), 1024) > 0
+Func GetIsBoss($aAgent) ;~ Description: Tests if an agent is a boss.
+	Return BitAND(GetTypeMap($aAgent), 1024) > 0
 EndFunc   ;==>GetIsBoss
-
-;~ Description: Returns a player's name.
-Func GetPlayerName($aAgent = -2)
-	If IsDllStruct($aAgent) = 0 Then $aAgent = GetAgentByID($aAgent)
-	Local $lLogin = DllStructGetData($aAgent, 'LoginNumber')
+Func GetPlayerName($aAgent = -2) ;~ Description: Returns a player's name.
+	Local $lLogin
+	If IsNumber($aAgent) Then $aAgent = GetAgentPtr($aAgent)
+	If IsPtr($aAgent) Then $lLogin = MemoryRead($aAgent + 394, 'long')
+	If IsDllStruct($aAgent) Then $lLogin = DllStructGetData($aAgent, 'LoginNumber')
+	If Not $lLogin Then Return ''
 	Local $lOffset[6] = [0, 0x18, 0x2C, 0x80C, 76 * $lLogin + 0x28, 0]
 	Local $lReturn = MemoryReadPtr($mBasePointer, $lOffset, 'wchar[30]')
 	Return $lReturn[1]
 EndFunc   ;==>GetPlayerName
-
-;~ Description: Returns the name of an agent.
-Func GetAgentName($aAgent = -2)
+Func GetAgentName($aAgent = -2) ;~ Description: Returns the name of an agent.
 	Local $lAgentID = GetAgentID($aAgent)
 	If Not $lAgentID Then Return ''
 	Local $lAddress = $mStringLogBase + 256 * $lAgentID
@@ -3624,24 +3527,20 @@ EndFunc   ;==>TolSleep
 Func GetWindowHandle()
 	Return $mGWWindowHandle
 EndFunc   ;==>GetWindowHandle
-
-;~ Description: Returns the distance between two coordinate pairs.
-Func ComputeDistance($aX1, $aY1, $aX2, $aY2)
-	Return Sqrt(($aX1 - $aX2) ^ 2 + ($aY1 - $aY2) ^ 2)
+Func ComputeDistance($aX1, $aY1, $aX2, $aY2) ;~ Description: Returns the distance between two coordinate pairs.
+	Return Sqrt(ComputePseudoDistance($aX1, $aY1, $aX2, $aY2))
 EndFunc   ;==>ComputeDistance
-
-;~ Description: Returns the distance between two agents.
-Func GetDistance($aAgent1 = -1, $aAgent2 = -2)
-	If IsDllStruct($aAgent1) = 0 Then $aAgent1 = GetAgentByID($aAgent1)
-	If IsDllStruct($aAgent2) = 0 Then $aAgent2 = GetAgentByID($aAgent2)
-	Return Sqrt((DllStructGetData($aAgent1, 'X') - DllStructGetData($aAgent2, 'X')) ^ 2 + (DllStructGetData($aAgent1, 'Y') - DllStructGetData($aAgent2, 'Y')) ^ 2)
+Func ComputePseudoDistance($aX1, $aY1, $aX2, $aY2) ;~ Description: Returns the distance between two coordinate pairs, without sqrt for speed in comparisons.
+	Return ($aX1 - $aX2) ^ 2 + ($aY1 - $aY2) ^ 2)
+EndFunc   ;==>ComputeDistance
+Func GetDistance($aAgent1 = -1, $aAgent2 = -2) ;~ Description: Returns the distance between two agents.
+	Local $lAgent1XY = GetAgentXY($aAgent1), $lAgent2XY = GetAgentXY($aAgent2)
+	Return ComputeDistance($lAgent1XY[0],$lAgent1XY[1],$lAgent2XY[0],$lAgent2XY[1])
 EndFunc   ;==>GetDistance
-
-;~ Description: Return the square of the distance between two agents.
-Func GetPseudoDistance($aAgent1, $aAgent2)
-	Return (DllStructGetData($aAgent1, 'X') - DllStructGetData($aAgent2, 'X')) ^ 2 + (DllStructGetData($aAgent1, 'Y') - DllStructGetData($aAgent2, 'Y')) ^ 2
+Func GetPseudoDistance($aAgent1, $aAgent2) ;~ Description: Return the distance between two agents, without sqrt for speed in comparisons.
+	Local $lAgent1XY = GetAgentXY($aAgent1), $lAgent2XY = GetAgentXY($aAgent2)
+	Return ComputePseudoDistance($lAgent1XY[0],$lAgent1XY[1],$lAgent2XY[0],$lAgent2XY[1])
 EndFunc   ;==>GetPseudoDistance
-
 ;~ Description: Checks if a point is within a polygon defined by an array
 Func GetIsPointInPolygon($aAreaCoords, $aPosX = 0, $aPosY = 0)
 	Local $lPosition
