@@ -2983,7 +2983,7 @@ Func GetHealth($aAgent = -2) ;~ Description: Returns health of an agent. (Must h
 	If IsDllStruct($aAgent) Then Return DllStructGetData($aAgent, 'HP') * DllStructGetData($aAgent, 'MaxHP')
 EndFunc   ;==>GetHealth
 Func GetIsMoving($aAgent = -2) ;~ Description: Tests if an agent is moving.
-	Local $xy = GetAgentMove($aAgent)
+	Local $xy = GetAgentMoveXY($aAgent)
 	Return $xy[0] <> 0 Or $xy[1] <> 0
 EndFunc   ;==>GetIsMoving
 Func GetIsKnocked($aAgent = -2) ;~ Description: Tests if an agent is knocked down.
@@ -3001,8 +3001,9 @@ Func GetIsAttacking($aAgent = -2) ;~ Description: Tests if an agent is attacking
 	Return False
 EndFunc   ;==>GetIsAttacking
 Func GetIsCasting($aAgent = -2) ;~ Description: Tests if an agent is casting.
-	If IsDllStruct($aAgent) = 0 Then $aAgent = GetAgentByID($aAgent)
-	Return DllStructGetData($aAgent, 'Skill') <> 0
+	If IsNumber($aAgent) Then $aAgent = GetAgentPtr($aAgent)
+	If IsPtr($aAgent) Then Return MemoryRead($aAgent + 436, 'word') <> 0
+	If IsDllStruct($aAgent) Then Return DllStructGetData($aAgent, 'Skill') <> 0
 EndFunc   ;==>GetIsCasting
 Func GetIsBleeding($aAgent = -2) ;~ Description: Tests if an agent is bleeding.
 	Return BitAND(GetAgentEffects($aAgent), 0x0001) > 0
@@ -3014,7 +3015,7 @@ Func GetIsEnemy($aAgent = -1) ;~ Description: Tests if an agent is an enemy to t
 	Return GetAllegiance($aAgent) == 3
 EndFunc
 Func GetIsAlive($aAgent = -2) ;~ Description: Tests if an agent is alive i.e. NOT dead, has at least 1 HP, and is able to "live"
-	$aAgent = GetAgentPtr($aAgent)
+	If IsNumber($aAgent) Then $aAgent = GetAgentPtr($aAgent)
 	Return Not GetIsDead($aAgent) And GetHP($aAgent) > 0 And GetIsLiving($aAgent)
 EndFunc
 Func GetIsDead($aAgent = -2) ;~ Description: Tests if an agent is dead.
