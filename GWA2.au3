@@ -209,29 +209,31 @@ Func MemoryRead($aAddress, $aType = 'dword')
 	DllCall($mKernelHandle, 'int', 'ReadProcessMemory', 'int', $mGWProcHandle, 'int', $aAddress, 'ptr', DllStructGetPtr($lBuffer), 'int', DllStructGetSize($lBuffer), 'int', '')
 	Return DllStructGetData($lBuffer, 1)
 EndFunc   ;==>MemoryRead
-
-;~ Description: Internal use only.
-Func MemoryReadPtr($aAddress, $aOffset, $aType = 'dword')
-	Local $lPointerCount = UBound($aOffset) - 2
-	Local $lBuffer = DllStructCreate('dword')
-
-	For $i = 0 To $lPointerCount
-		$aAddress += $aOffset[$i]
-		DllCall($mKernelHandle, 'int', 'ReadProcessMemory', 'int', $mGWProcHandle, 'int', $aAddress, 'ptr', DllStructGetPtr($lBuffer), 'int', DllStructGetSize($lBuffer), 'int', '')
-		$aAddress = DllStructGetData($lBuffer, 1)
-		If $aAddress == 0 Then
-			Local $lData[2] = [0, 0]
-			Return $lData
-		EndIf
-	Next
-
-	$aAddress += $aOffset[$lPointerCount + 1]
-	$lBuffer = DllStructCreate($aType)
-	DllCall($mKernelHandle, 'int', 'ReadProcessMemory', 'int', $mGWProcHandle, 'int', $aAddress, 'ptr', DllStructGetPtr($lBuffer), 'int', DllStructGetSize($lBuffer), 'int', '')
-	Local $lData[2] = [$aAddress, DllStructGetData($lBuffer, 1)]
-	Return $lData
+Func MemoryReadPtr($aAddress, $aOffset, $aType = 'dword');~ Description: Internal use only
+   Local $lPointerCount = UBound($aOffset) - 2
+   Local $lBuffer = DllStructCreate($aType)
+   For $i = 0 To $lPointerCount
+	  $aAddress += $aOffset[$i]
+	  DllCall($mKernelHandle, 'int', 'ReadProcessMemory', 'int', $mGWProcHandle, 'int', $aAddress, 'ptr', DllStructGetPtr($lBuffer), 'int', DllStructGetSize($lBuffer), 'int', '')
+	  $aAddress = DllStructGetData($lBuffer, 1)
+	  If $aAddress = 0 Then
+		 Local $lData[2] = [0, 0]
+		 Return $lData
+	  EndIf
+   Next
+   $aAddress += $aOffset[$lPointerCount + 1]
+   $lBuffer = DllStructCreate($aType)
+   DllCall($mKernelHandle, 'int', 'ReadProcessMemory', 'int', $mGWProcHandle, 'int', $aAddress, 'ptr', DllStructGetPtr($lBuffer), 'int', DllStructGetSize($lBuffer), 'int', '')
+   Local $lData[2] = [$aAddress, DllStructGetData($lBuffer, 1)]
+   Return $lData
 EndFunc   ;==>MemoryReadPtr
-
+;~ Description: Reads consecutive values from memory to buffer struct.
+;~ Author: 4D1.
+Func MemoryReadStruct($aAddress, $aStruct = 'dword')
+   Local $lBuffer = DllStructCreate($aStruct)
+   DllCall($mKernelHandle, 'int', 'ReadProcessMemory', 'int', $mGWProcHandle, 'int', $aAddress, 'ptr', DllStructGetPtr($lBuffer), 'int', DllStructGetSize($lBuffer), 'int', '')
+   Return $lBuffer
+EndFunc   ;==>MemoryReadStruct
 ;~ Description: Internal use only.
 Func SwapEndian($aHex)
 	Return StringMid($aHex, 7, 2) & StringMid($aHex, 5, 2) & StringMid($aHex, 3, 2) & StringMid($aHex, 1, 2)
@@ -2641,7 +2643,7 @@ EndFunc   ;==>GetAgentByID
 Func GetAgentPtr($aAgentID) ;~ Description: Internal use for GetAgentByID() and other Agent functions
 	If IsPtr($aAgentID) Then Return $aAgentID ; Already a pointer, presume Agent Ptr.
 	Local $lOffset[3] = [0, 4 * GetAgentID($aAgentID), 0]
-	Local $lAgentStructAddress = MemoryReadPtr($mAgentBase, $lOffset)
+	Local $lAgentStructAddress = MemoryReadPtr($mAgentBase, $lOffset, 'ptr')
 	Return $lAgentStructAddress[0]
 EndFunc   ;==>GetAgentPtr
 Func GetAgentExists($aAgentID = -2) ;~ Description: Test if an agent exists.
@@ -2900,7 +2902,7 @@ Func GetAgentY($aAgent = -2) ;~ Description: Get Agent Y Co-ordinate
 EndFunc
 Func GetAgentXY($aAgent = -2) ;~ Description: Get Agent X and Y value as Array
 	If IsNumber($aAgent) Then $aAgent = GetAgentPtr($aAgent)
-	If IsPtr($aAgent) Then $aAgent = MemoryReadStruct($aAgentPtr + 116,'float X;float Y')
+	If IsPtr($aAgent) Then $aAgent = MemoryReadStruct($aAgent + 116,'float X;float Y')
 	Local $xy[2] = [0,0]
 	If IsDllStruct($aAgent) Then
 		$xy[0] = DllStructGetData($aAgent, 'X')
@@ -2925,7 +2927,7 @@ Func GetAgentMoveY($aAgent = -2) ;~ Description: Get Agent MoveY value
 EndFunc
 Func GetAgentMoveXY($aAgent = -2) ;~ Description: Get Agent MoveX and MoveY value as Array
 	If IsNumber($aAgent) Then $aAgent = GetAgentPtr($aAgent)
-	If IsPtr($aAgent) Then $aAgent = MemoryReadStruct($aAgentPtr + 160,'float MoveX;float MoveY')
+	If IsPtr($aAgent) Then $aAgent = MemoryReadStruct($aAgent + 160,'float MoveX;float MoveY')
 	Local $xy[2] = [0,0]
 	If IsDllStruct($aAgent) Then
 		$xy[0] = DllStructGetData($aAgent, 'MoveX')
@@ -3527,13 +3529,13 @@ Func ComputeDistance($aX1, $aY1, $aX2, $aY2) ;~ Description: Returns the distanc
 	Return Sqrt(ComputePseudoDistance($aX1, $aY1, $aX2, $aY2))
 EndFunc   ;==>ComputeDistance
 Func ComputePseudoDistance($aX1, $aY1, $aX2, $aY2) ;~ Description: Returns the distance between two coordinate pairs, without sqrt for speed in comparisons.
-	Return ($aX1 - $aX2) ^ 2 + ($aY1 - $aY2) ^ 2)
+	Return ($aX1 - $aX2) ^ 2 + ($aY1 - $aY2) ^ 2
 EndFunc   ;==>ComputeDistance
 Func GetDistance($aAgent1 = -1, $aAgent2 = -2) ;~ Description: Returns the distance between two agents.
 	Local $lAgent1XY = GetAgentXY($aAgent1), $lAgent2XY = GetAgentXY($aAgent2)
 	Return ComputeDistance($lAgent1XY[0],$lAgent1XY[1],$lAgent2XY[0],$lAgent2XY[1])
 EndFunc   ;==>GetDistance
-Func GetPseudoDistance($aAgent1, $aAgent2) ;~ Description: Return the distance between two agents, without sqrt for speed in comparisons.
+Func GetPseudoDistance($aAgent1 = -1, $aAgent2 = -2) ;~ Description: Return the distance between two agents, without sqrt for speed in comparisons.
 	Local $lAgent1XY = GetAgentXY($aAgent1), $lAgent2XY = GetAgentXY($aAgent2)
 	Return ComputePseudoDistance($lAgent1XY[0],$lAgent1XY[1],$lAgent2XY[0],$lAgent2XY[1])
 EndFunc   ;==>GetPseudoDistance
