@@ -295,7 +295,7 @@ Func Initialize($aGW, $bChangeTitle = True, $notUsed1 = 0, $notUsed2 = 0)
 			MemoryClose()
 			$mGWProcHandle = 0
 		Next
-	Else
+	ElseIf $aGW <> 0 Then
 		$mGWProcessId = $aGW
 		$mGWWindowHandle = GetHwnd($mGWProcessId)
 		MemoryOpen($aGW)
