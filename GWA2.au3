@@ -2681,34 +2681,33 @@ Func GetAgentByName($aName) ;~ Description: Returns agent by name.
 		If StringInStr($lName, $aName) > 0 Then Return GetAgentByID($i)
 	Next
 EndFunc   ;==>GetAgentByName
-Func GetNearestAgentToAgent($aAgent = -2,$lAgentArray=0) ;~ Description: Returns the nearest agent to an agent.
+Func GetNearestEnemyToAgent($aAgent = -2,$lAgentArray=0) ;~ Description: Returns the nearest enemy to an agent.
 	Local $lAgentCoords = GetAgentXY($aAgent)
-	Return GetNearestAgentToCoords($lAgentCoords[0],$lAgentCoords[1],$lAgentArray,GetAgentID($aAgent))
-EndFunc   ;==>GetNearestAgentToAgent
-Func GetNearestEnemyToAgent($aAgent = -2) ;~ Description: Returns the nearest enemy to an agent.
+	Return GetNearestEnemyToCoords($lAgentCoords[0],$lAgentCoords[1],$lAgentArray,GetAgentID($aAgent))
+EndFunc   ;==>GetNearestEnemyToAgent
+Func GetNearestEnemyToCoords($aX, $aY, $lAgentArray=0, $aExcludeAgentID=0) ;~ Description: Returns the nearest enemy to a set of coordinates. Add aExcludeAgentID to exclude another enemy.
 	Local $lNearestAgent, $lNearestDistance = 100000000
 	Local $lDistance
-	Local $lAgentArray = GetAgentArray(0xDB)
+	If $lAgentArray = 0 Then $lAgentArray = GetAgentArray(0xDB)
 
-	If IsNumber($aAgent) Then $aAgent = GetAgentPtr($aAgent)
-	Local $lAgentID = GetAgentID($aAgent)
-	If Not $lAgentID Then Return 0
-	Local $lAgent1XY= GetAgentXY($lAgentArray[$i])
 	For $i = 1 To $lAgentArray[0]
-		If GetAgentID($lAgentArray[0]) == $lAgentID Then ContinueLoop
+		If $aExcludeAgentID And GetAgentID($lAgentArray[$i]) == $aExcludeAgentID Then ContinueLoop
 		If Not GetIsEnemy($lAgentArray[$i]) Then ContinueLoop ; Not an enemy
 		If Not GetIsAlive($lAgentArray[$i]) Then ContinueLoop ; Is not alive
-		Local $lAgent2XY= GetAgentXY($lAgentArray[$i])
-		$lDistance = ComputePseudoDistance($lAgent1XY[0],$lAgent1XY[1],$lAgent2XY[0],$lAgent2XY[1])
+		Local $lAgentCoords= GetAgentXY($lAgentArray[$i])
+		$lDistance = ComputePseudoDistance($aX,$aY,$lAgentCoords[0],$lAgentCoords[1])
 		If $lDistance > $lNearestDistance Then ContinueLoop
 		$lNearestAgent = $lAgentArray[$i]
 		$lNearestDistance = $lDistance
 	Next
-
 	SetExtended(Sqrt($lNearestDistance))
 	Return $lNearestAgent
-EndFunc   ;==>GetNearestEnemyToAgent
-Func GetNearestAgentToCoords($aX, $aY, $lAgentArray=0, $aExcludeAgentID=0) ;~ Description: Returns the nearest agent to a set of coordinates. Add aExcludeAgentID to exclude current player, for example.
+EndFunc
+Func GetNearestAgentToAgent($aAgent = -2,$lAgentArray=0) ;~ Description: Returns the nearest agent to an agent.
+	Local $lAgentCoords = GetAgentXY($aAgent)
+	Return GetNearestAgentToCoords($lAgentCoords[0],$lAgentCoords[1],$lAgentArray,GetAgentID($aAgent))
+EndFunc   ;==>GetNearestAgentToAgent
+Func GetNearestAgentToCoords($aX, $aY, $lAgentArray=0, $aExcludeAgentID=0) ;~ Description: Returns the nearest agent to a set of coordinates. Add aExcludeAgentID to exclude current player.
 	Local $lNearestAgent, $lNearestDistance = 100000000
 	Local $lDistance
 	If $lAgentArray = 0 Then $lAgentArray = GetAgentArray()
@@ -2747,7 +2746,7 @@ Func GetNearestNPCToAgent($aAgent = -2) ;~ Description: Returns the nearest NPC 
 	Local $lAgentCoords = GetAgentXY($aAgent)
 	Return GetNearestNPCToCoords($lAgentCoords[0],$lAgentCoords[1],GetAgentArray(0xDB),GetAgentID($aAgent))
 EndFunc   ;==>GetNearestNPCToAgent
-Func GetNearestNPCToCoords($aX, $aY, $lAgentArray=0, $aExcludeAgentID=0) ;~ Description: Returns the nearest NPC to a set of coordinates. Add aExcludeAgentID to exclude current player, for example.
+Func GetNearestNPCToCoords($aX, $aY, $lAgentArray=0, $aExcludeAgentID=0) ;~ Description: Returns the nearest NPC to a set of coordinates. Add aExcludeAgentID to exclude another NPC.
 	Local $lNearestAgent, $lNearestDistance = 100000000
 	Local $lDistance
 	If $lAgentArray = 0 Then $lAgentArray = GetAgentArray(0xDB)
@@ -2769,7 +2768,7 @@ Func GetNearestItemToAgent($aAgent = -2, $aCanPickUp = True) ;~ Description: Ret
 	Local $lAgentCoords = GetAgentXY($aAgent)
 	Return GetNearestNPCToCoords($lAgentCoords[0],$lAgentCoords[1],$aCanPickUp,GetAgentArray(0x400),GetAgentID($aAgent))
 EndFunc   ;==>GetNearestItemToAgent
-Func GetNearestItemToCoords($aX, $aY, $aCanPickUp = True, $lAgentArray=0, $aExcludeAgentID=0) ;~ Description: Returns the nearest Item to a set of coordinates. Add aExcludeAgentID to exclude another item, for example.
+Func GetNearestItemToCoords($aX, $aY, $aCanPickUp = True, $lAgentArray=0, $aExcludeAgentID=0) ;~ Description: Returns the nearest Item to a set of coordinates. Add aExcludeAgentID to exclude another item.
 	Local $lNearestAgent, $lNearestDistance = 100000000
 	Local $lDistance
 	If $lAgentArray = 0 Then $lAgentArray = GetAgentArray(0x400)
@@ -2786,7 +2785,6 @@ Func GetNearestItemToCoords($aX, $aY, $aCanPickUp = True, $lAgentArray=0, $aExcl
 	SetExtended(Sqrt($lNearestDistance))
 	Return $lNearestAgent
 EndFunc   ;==>GetNearestItemToCoords
-;~ Param: an array returned by GetAgentArray. This is totally optional, but can greatly improve script speed.
 Func GetParty($aAgentArray = 0) ;~ Description: Returns array of party members
 	Local $lReturnArray[17]
 	$lReturnArray[0] = 0
@@ -2800,9 +2798,7 @@ Func GetParty($aAgentArray = 0) ;~ Description: Returns array of party members
 	ReDim $lReturnArray[$lReturnArray[0] + 1]
 	Return $lReturnArray
 EndFunc   ;==>GetParty
-
-;~ Description: Quickly creates an array of agents of a given type
-Func GetAgentArray($aType = 0)
+Func GetAgentArray($aType = 0) ;~ Description: Quickly creates an array of agents of a given type
 	Local $lStruct
 	Local $lCount
 	Local $lBuffer = ''
@@ -2842,7 +2838,6 @@ Func GetPartyDanger($aAgentArray = 0, $aParty = 0) ;~ Description Returns the "d
 	;~ Param1: an array returned by GetAgentArray(). This is totally optional, but can greatly improve script speed.
 	;~ Param2: an array returned by GetParty() This is totally optional, but can greatly improve script speed.
 	If $aAgentArray == 0 Then $aAgentArray = GetAgentArray(0xDB)
-	$aAgentArray = AgentArrayFilter($aAgentArray,0xDB,True,True) ; Filter agent array to only bring back enemies who are alive.
 	If $aParty == 0 Then $aParty = GetParty($aAgentArray)
 	
 	Local $lReturnArray[$aParty[0]+1]
