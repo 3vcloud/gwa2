@@ -1,5 +1,5 @@
-Local $mGWA2Version = '3.7.10C' ; GWA2 Version
-; ADDED A BUNCH OF STUFF
+Local $mGWA2Version = '3.8.0' ; GWA2 Version
+; >= 3.8.0 now includes Pointer based functions
 ; After the Update from 2018/05/18
 
 #include-once
