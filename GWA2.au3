@@ -2462,13 +2462,13 @@ Func GetGoldCharacter() ;~ Description: Returns amount of gold being carried.
 	Return $lReturn[1]
 EndFunc   ;==>GetGoldCharacter
 Func FindSalvageKit() ;~ Description: Returns item ID of salvage kit in inventory.
-	Local $iUses = 0, $lKit = 0, $lUses = 101, $lBagPtr, $lItemArray, $lItemPtr
+	Local $iUses = 0, $lKit = 0, $lUses = 101, $lBagPtr, $lItemArrayPtr, $lItemPtr
 	For $i = 1 To 4	
 		$lBagPtr = GetBagPtr($i)
 		If Not $lBagPtr Then ContinueLoop ; No bag.
-		$lItemArray = GetBagItemArray($lBagPtr)
-		For $j = 1 To GetBagSlots($i)
-			$lItemPtr = MemoryRead($lItemArrayPtr + 4 * ($slot-1), 'ptr')
+		$lItemArrayPtr = GetBagItemArray($lBagPtr)
+		For $j = 0 To GetBagSlots($lBagPtr)-1
+			$lItemPtr = MemoryRead($lItemArrayPtr + 4 * ($slot), 'ptr')
 			If Not $lItemPtr Then ContinueLoop ; Empty slot
 			Switch GetItemModelID($lItemPtr)
 				Case 2992,2993
@@ -2483,13 +2483,13 @@ Func FindSalvageKit() ;~ Description: Returns item ID of salvage kit in inventor
 	Return $lKit
 EndFunc   ;==>FindSalvageKit
 Func FindExpertSalvageKit() ;~ Description: Returns item ID of expert salvage kit in inventory.
-	Local $iUses = 0, $lKit = 0, $lUses = 101, $lBagPtr, $lItemArray, $lItemPtr
+	Local $iUses = 0, $lKit = 0, $lUses = 101, $lBagPtr, $lItemArrayPtr, $lItemPtr
 	For $i = 1 To 4	
 		$lBagPtr = GetBagPtr($i)
 		If Not $lBagPtr Then ContinueLoop ; No bag.
-		$lItemArray = GetBagItemArray($lBagPtr)
-		For $j = 1 To GetBagSlots($i)
-			$lItemPtr = MemoryRead($lItemArrayPtr + 4 * ($slot-1), 'ptr')
+		$lItemArrayPtr = GetBagItemArray($lBagPtr)
+		For $j = 0 To GetBagSlots($lBagPtr)-1
+			$lItemPtr = MemoryRead($lItemArrayPtr + 4 * ($slot), 'ptr')
 			If Not $lItemPtr Then ContinueLoop ; Empty slot
 			Switch GetItemModelID($lItemPtr)
 				Case 2991,5900
@@ -2503,34 +2503,26 @@ Func FindExpertSalvageKit() ;~ Description: Returns item ID of expert salvage ki
 	Next
 	Return $lKit
 EndFunc   ;==>FindExpertSalvageKit
-
-;~ Description: Legacy function, use FindIdentificationKit instead.
-Func FindIDKit()
+Func FindIDKit() ;~ Description: Legacy function, use FindIdentificationKit instead.
 	Return FindIdentificationKit()
 EndFunc   ;==>FindIDKit
-
-;~ Description: Returns item ID of ID kit in inventory.
-Func FindIdentificationKit()
-	Local $lItem
-	Local $lKit = 0
-	Local $lUses = 101
-	For $i = 1 To 4
-		For $j = 1 To DllStructGetData(GetBag($i), 'Slots')
-			$lItem = GetItemBySlot($i, $j)
-			Switch DllStructGetData($lItem, 'ModelID')
-				Case 2989
-					If DllStructGetData($lItem, 'Value') / 2 < $lUses Then
-						$lKit = DllStructGetData($lItem, 'ID')
-						$lUses = DllStructGetData($lItem, 'Value') / 2
-					EndIf
-				Case 5899
-					If DllStructGetData($lItem, 'Value') / 2.5 < $lUses Then
-						$lKit = DllStructGetData($lItem, 'ID')
-						$lUses = DllStructGetData($lItem, 'Value') / 2.5
-					EndIf
-				Case Else
-					ContinueLoop
+Func FindIdentificationKit() ;~ Description: Returns item ID of ID kit in inventory.
+	Local $iUses = 0, $lKit = 0, $lUses = 101, $lBagPtr, $lItemArrayPtr, $lItemPtr
+	For $i = 1 To 4	
+		$lBagPtr = GetBagPtr($i)
+		If Not $lBagPtr Then ContinueLoop ; No bag.
+		$lItemArrayPtr = GetBagItemArray($lBagPtr)
+		For $j = 0 To GetBagSlots($lBagPtr)-1
+			$lItemPtr = MemoryRead($lItemArrayPtr + 4 * ($slot), 'ptr')
+			If Not $lItemPtr Then ContinueLoop ; Empty slot
+			Switch GetItemModelID($lItemPtr)
+				Case 2989,5899
+					$iUses = GetItemUses($lItemPtr)
+					If $iUses > $lUses Then ContinueLoop ; This kit has more uses than previous selected kit.
+					$lKit = GetItemID($lItemPtr)
+					$lUses = $iUses
 			EndSwitch
+			If $lUses == 1 Then Return $lKit ; Shortcut if selected kit has only 1 use left
 		Next
 	Next
 	Return $lKit
