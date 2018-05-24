@@ -2292,7 +2292,7 @@ EndFunc
 Func GetItemUses($aItem) ;~ Description: Returns uses left for ID kit or salvage kits. Any other item returns the quantity value.
 		If IsNumber($aItem) Then $aItem = GetItemPtr($aItem)
 		Switch GetItemModelID($aItem)
-			Case 2992,2989
+			Case 2992,2993,2989
 				Return Floor(GetItemValue($aItem) / 2)
 			Case 5899
 				Return Floor(GetItemValue($aItem) / 2.5)
