@@ -728,30 +728,26 @@ EndFunc   ;==>ScanForCharname
 
 #Region Commands
 #Region Item
-;~ Description: Starts a salvaging session of an item.
-Func StartSalvage($aItem, $aExpert = False)
+
+Func StartSalvage($aItem, $aSalvageKit = False) ;~ Description: Starts a salvaging session of an item.
+	; If $aSalvageKit is BOOLEAN, and is TRUE, this means the user wants to start an EXPERT salvage.
+	; If $aSalvageKit does NOT evaluate to FALSE, presume this is an existing kit that the user explicitly wants to use.
 	Local $lOffset[4] = [0, 0x18, 0x2C, 0x690]
 	Local $lSalvageSessionID = MemoryReadPtr($mBasePointer, $lOffset)
-
-	If IsDllStruct($aItem) = 0 Then
-		Local $lItemID = $aItem
-	Else
-		Local $lItemID = DllStructGetData($aItem, 'ID')
+	If IsBool($aSalvageKit) Then 
+		If $aSalvageKit Then 
+			$aSalvageKit = FindExpertSalvageKit()
+		Else
+			$aSalvageKit = FindExpertSalvageKit()
+		EndIf
 	EndIf
-	
-	Local $lSalvageKit = 0
-	If $aExpert Then
-		$lSalvageKit = FindExpertSalvageKit()
-	Else
-		$lSalvageKit = FindSalvageKit()
-	EndIf
-	If $lSalvageKit = 0 Then Return
-
-	DllStructSetData($mSalvage, 2, $lItemID)
-	DllStructSetData($mSalvage, 3, $lSalvageKit)
+	If Not $aSalvageKit Then Return False ; Failed to get a salvage kit
+	$aSalvageKit = GetItemID($aSalvageKit)
+	DllStructSetData($mSalvage, 2, GetItemID($aItem))
+	DllStructSetData($mSalvage, 3, $aSalvageKit)
 	DllStructSetData($mSalvage, 4, $lSalvageSessionID[1])
-
 	Enqueue($mSalvagePtr, 16)
+	Return $aSalvageKit
 EndFunc   ;==>StartSalvage
 
 ;~ Description: Salvage the materials out of an item.
@@ -2273,7 +2269,7 @@ Func GetItemUses($aItem) ;~ Description: Returns uses left for ID kit or salvage
 EndFunc
 Func GetRarity($aItem) ;~ Description: Returns rarity (name color) of an item.
 	Local $lPtr = GetItemProperty($aItem,'NameString')
-	If Not $lPtr Then Return
+	If Not $lPtr Then Return	
 	Return MemoryRead($lPtr, 'ushort')
 EndFunc   ;==>GetRarity
 Func GetIsRareMaterial($aItem) ;~ Description: Returns if material is Rare.
