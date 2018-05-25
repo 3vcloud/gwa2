@@ -919,8 +919,14 @@ EndFunc   ;==>TraderRequest
 ;~ Description: Buy the requested item.
 Func TraderBuy()
 	If Not GetTraderCostID() Or Not GetTraderCostValue() Then Return False
+	Local $lStartAmount = GetGoldCharacter()
 	Enqueue($mTraderBuyPtr, 4)
-	Return True
+	Local $lDeadlock = TimerInit(), $lTimeout = 3000 + GetPing()
+	Do
+		Sleep(50) ; Wait until gold has changed.
+		If $lStartAmount <> GetGoldCharacter() Then Return True
+	Until TimerDiff($lDeadlock) > $lTimeout
+	Return False
 EndFunc   ;==>TraderBuy
 
 ;~ Description: Request a quote to sell an item to the trader.
