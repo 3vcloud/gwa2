@@ -1172,9 +1172,9 @@ Func GoToNPC($aAgent)
 	If Not IsDllStruct($aAgent) Then $aAgent = GetAgentByID($aAgent)
 	Local $lMe
 	Local $lBlocked = 0
-	Local $lMapLoading = GetMapLoading(), $lMapLoadingOld
+	Local $lMapLoading = GetMapLoading(), $lMapLoadingOld, $lAgentXY = GetAgentXY($aAgent)
 
-	Move(DllStructGetData($aAgent, 'X'), DllStructGetData($aAgent, 'Y'), 100)
+	Move($aAgent[0], $aAgent[1], 100)
 	Sleep(100)
 	GoNPC($aAgent)
 
@@ -1182,20 +1182,20 @@ Func GoToNPC($aAgent)
 		Sleep(100)
 		$lMe = GetAgentByID(-2)
 
-		If DllStructGetData($lMe, 'HP') <= 0 Then ExitLoop
+		If GetAgentProperty($lMe, 'HP') <= 0 Then ExitLoop
 
 		$lMapLoadingOld = $lMapLoading
 		$lMapLoading = GetMapLoading()
 		If $lMapLoading <> $lMapLoadingOld Then ExitLoop
-
-		If DllStructGetData($lMe, 'MoveX') == 0 And DllStructGetData($lMe, 'MoveY') == 0 Then
-			$lBlocked += 1
-			Move(DllStructGetData($aAgent, 'X'), DllStructGetData($aAgent, 'Y'), 100)
-			Sleep(100)
-			GoNPC($aAgent)
-		EndIf
-	Until ComputeDistance(DllStructGetData($lMe, 'X'), DllStructGetData($lMe, 'Y'), DllStructGetData($aAgent, 'X'), DllStructGetData($aAgent, 'Y')) < 250 Or $lBlocked > 14
+		$lDistance = GetDistance($lMe,$aAgent)
+		If GetIsMoving($lMe) Then ContinueLoop ; Skip rest of logic if we're still moving.
+		$lBlocked += 1
+		Move($aAgent[0], $aAgent[1], 100)
+		Sleep(100)
+		GoNPC($aAgent)
+	Until $lDistance < 250 Or $lBlocked > 14
 	Sleep(GetPing() + 300)
+	Return $lBlocked < 15 And $lDistance < 250 ; Presume a distance of less than 250 is success. Otherwise, blocked.
 EndFunc   ;==>GoToNPC
 
 ;~ Description: Run to a signpost.
