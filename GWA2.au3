@@ -999,10 +999,16 @@ Func WithdrawGold($aAmount = 0)
 
 	ChangeGold($lCharacter + $lAmount, $lStorage - $lAmount)
 EndFunc   ;==>WithdrawGold
-
-;~ Description: Internal use for moving gold.
-Func ChangeGold($aCharacter, $aStorage)
-	Return SendPacket(0xC, $ChangeGoldHeader, $aCharacter, $aStorage)
+Func ChangeGold($aCharacter, $aStorage) ;~ Description: Internal use for moving gold. Added a wait mechanism.
+	Local $lStartAmount = GetGoldCharacter()
+	If $lStartAmount == $aCharacter Then Return True ; No gold change.
+	SendPacket(0xC, $ChangeGoldHeader, $aCharacter, $aStorage)
+	Local $lDeadlock = TimerInit(), $lTimeout = 3000 + GetPing()
+	Do
+		Sleep(50) ; Wait until gold has changed.
+		If $lStartAmount <> GetGoldCharacter() Then Return True
+	Until TimerDiff($lDeadlock) > $lTimeout
+	Return False
 EndFunc   ;==>ChangeGold
 #EndRegion Item
 
