@@ -931,32 +931,29 @@ EndFunc   ;==>TraderBuy
 
 ;~ Description: Request a quote to sell an item to the trader.
 Func TraderRequestSell($aItem)
-	Local $lItemID
-	Local $lFound = False
 	Local $lQuoteID = MemoryRead($mTraderQuoteID)
-
-	If IsDllStruct($aItem) = 0 Then
-		$lItemID = $aItem
-	Else
-		$lItemID = DllStructGetData($aItem, 'ID')
-	EndIf
-
-	DllStructSetData($mRequestQuoteSell, 2, $lItemID)
+	DllStructSetData($mRequestQuoteSell, 2, GetItemID($aItem))
 	Enqueue($mRequestQuoteSellPtr, 8)
 
-	Local $lDeadlock = TimerInit()
+	Local $lDeadlock = TimerInit(), $lTimeout = GetPing() + 5000
 	Do
 		Sleep(20)
-		$lFound = MemoryRead($mTraderQuoteID) <> $lQuoteID
-	Until $lFound Or TimerDiff($lDeadlock) > GetPing() + 5000
-	Return $lFound
+		If MemoryRead($mTraderQuoteID) <> $lQuoteID Then Return True
+	Until TimerDiff($lDeadlock) > $lTimeout
+	Return False
 EndFunc   ;==>TraderRequestSell
 
 ;~ Description: ID of the item item being sold.
 Func TraderSell()
 	If Not GetTraderCostID() Or Not GetTraderCostValue() Then Return False
+	Local $lStartAmount = GetGoldCharacter()
 	Enqueue($mTraderSellPtr, 4)
-	Return True
+	Local $lDeadlock = TimerInit(), $lTimeout = 3000 + GetPing()
+	Do
+		Sleep(50) ; Wait until gold has changed.
+		If $lStartAmount <> GetGoldCharacter() Then Return True
+	Until TimerDiff($lDeadlock) > $lTimeout
+	Return False
 EndFunc   ;==>TraderSell
 
 ;~ Description: Drop gold on the ground.
