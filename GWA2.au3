@@ -2215,7 +2215,7 @@ EndFunc   ;==>GetMaxImperialFaction
 
 #Region Item
 Func GetItemProperty($aItem,$aPropertyName, $aNoCache = False) ;~ Description: Fetch property of an item, either ptr or dllstruct. $aNoCache will force a memory read for that value.
-	If IsNumber($aItem) Or $aNoCache Then $aItem = GetItemPtr(GetItemID($aItem)) ; Pointer based - no need to load whole struct into memory for 1 value
+	If IsNumber($aItem) Or $aNoCache Then $aItem = GetItemPtr($aItem) ; Pointer based - no need to load whole struct into memory for 1 value
 	If IsDllStruct($aItem) Then Return DllStructGetData($aItem,$aPropertyName)
 	If IsPtr($aItem) Then
 		Local $aStructElementInfo = Eval('mItemStructInfo_'&$aPropertyName)
