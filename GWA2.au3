@@ -890,8 +890,9 @@ Func TraderRequest($aModelID, $aExtraID = -1)
 	Local $lItemStructSize = DllStructGetSize($lItemStruct)
 	Local $lItemStructPtr = DllStructGetPtr($lItemStruct)
 	Local $lQuoteID = MemoryRead($mTraderQuoteID)
-
-	For $lItemID = 1 To GetItemArraySize(
+	Local $lItemPtr
+	
+	For $lItemID = 1 To GetItemArraySize()
 		$lItemPtr = GetItemPtr($lItemID)
 		If Not $lItemPtr Then ContinueLoop
 		DllCall($mKernelHandle, 'int', 'ReadProcessMemory', 'int', $mGWProcHandle, 'int', $lItemPtr, 'ptr', $lItemStructPtr, 'int', $lItemStructSize, 'int', '')
@@ -907,13 +908,12 @@ Func TraderRequest($aModelID, $aExtraID = -1)
 	DllStructSetData($mRequestQuote, 2, GetItemProperty($lItemStruct, 'ID'))
 	Enqueue($mRequestQuotePtr, 8)
 
-	Local $lDeadlock = TimerInit()
-	$lFound = False
+	Local $lDeadlock = TimerInit(), $lTimeout = GetPing() + 5000
 	Do
 		Sleep(20)
-		$lFound = MemoryRead($mTraderQuoteID) <> $lQuoteID
-	Until $lFound Or TimerDiff($lDeadlock) > GetPing() + 5000
-	Return $lFound
+		If MemoryRead($mTraderQuoteID) <> $lQuoteID Then Return True
+	Until TimerDiff($lDeadlock) > $lTimeout
+	Return False
 EndFunc   ;==>TraderRequest
 
 ;~ Description: Buy the requested item.
@@ -923,7 +923,7 @@ Func TraderBuy()
 	Enqueue($mTraderBuyPtr, 4)
 	Local $lDeadlock = TimerInit(), $lTimeout = 3000 + GetPing()
 	Do
-		Sleep(50) ; Wait until gold has changed.
+		Sleep(20) ; Wait until gold has changed.
 		If $lStartAmount <> GetGoldCharacter() Then Return True
 	Until TimerDiff($lDeadlock) > $lTimeout
 	Return False
@@ -950,7 +950,7 @@ Func TraderSell()
 	Enqueue($mTraderSellPtr, 4)
 	Local $lDeadlock = TimerInit(), $lTimeout = 3000 + GetPing()
 	Do
-		Sleep(50) ; Wait until gold has changed.
+		Sleep(20) ; Wait until gold has changed.
 		If $lStartAmount <> GetGoldCharacter() Then Return True
 	Until TimerDiff($lDeadlock) > $lTimeout
 	Return False
@@ -958,15 +958,7 @@ EndFunc   ;==>TraderSell
 
 ;~ Description: Drop gold on the ground.
 Func DropGold($aAmount = 0)
-	Local $lAmount
-
-	If $aAmount > 0 Then
-		$lAmount = $aAmount
-	Else
-		$lAmount = GetGoldCharacter()
-	EndIf
-
-	Return SendPacket(0x8, $DropGoldHeader, $lAmount)
+	Return SendPacket(0x8, $DropGoldHeader, $aAmount)
 EndFunc   ;==>DropGold
 
 ;~ Description: Deposit gold into storage.
