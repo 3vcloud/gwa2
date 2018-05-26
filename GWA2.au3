@@ -77,7 +77,7 @@ DeclareStructOffsets($mAgentStructStr,'mAgentStructInfo_')
 ; Bag Struct Info
 Local $mBagStructStr = 'byte unknown1[4];long index;long id;ptr containerItem;long ItemsCount;ptr bagArray;ptr itemArray;long fakeSlots;long slots'
 Local $mBagStructSize = 36 ; DllStructGetSize(DllStructCreate($mBagStructStr))
-DeclareStructOffsets($mAgentStructStr,'mBagStructInfo_')
+DeclareStructOffsets($mBagStructStr,'mBagStructInfo_')
 
 Func DeclareStructOffsets($aStructString,$aVarPrefix) ; NOTE: Struct elements MUST have names for this function to work properly!
 	Local $lSplit = StringSplit($aStructString,';'), $lSplit2,$lElementName,$lElementType,$lElementOffset=0,$lElementSize=1, $lArrayMatch, $lDebug=0
@@ -760,40 +760,35 @@ Func SalvageMod($aModIndex)
 	Return SendPacket(0x8, $SalvageModHeader, $aModIndex)
 EndFunc   ;==>SalvageMod
 
-;~ Description: Identifies an item.
-Func IdentifyItem($aItem)
-	If GetIsIDed($aItem) Then Return
 
-	Local $lItemID
-	If IsDllStruct($aItem) = 0 Then
-		$lItemID = $aItem
-	Else
-		$lItemID = DllStructGetData($aItem, 'ID')
-	EndIf
-
-	Local $lIDKit = FindIDKit()
-	If $lIDKit == 0 Then Return
-
-	SendPacket(0xC, $IdentifyItemHeader, $lIDKit, $lItemID)
-
-	Local $lDeadlock = TimerInit()
+Func IdentifyItem($aItem,$aIDKit=0) ;~ Description: Identifies an item. Pass ID Kit to explicitly use. returns True on success, False on failure.
+	$aItem = GetItemByItemID($aItem)
+	Local $isIDed = GetIsIdentified($aItem)
+	If $isIDed Then Return $isIDed ; Already Identified?
+	If Not $aIDKit Then $aIDKit = FindIDKit()
+	If Not $aIDKit Then Return False
+	Local $ping = GetPing()
+	SendPacket(0xC, $IdentifyItemHeader, GetItemProperty($aIDKit,'ID'),  GetItemProperty($aItem,'ID'))
+	Local $lDeadlock = TimerInit(), $lTimeout = 5000 + $ping, $lItemPtr = GetItemPtr($aItem)
 	Do
-		Sleep(20)
-	Until GetIsIDed($lItemID) Or TimerDiff($lDeadlock) > 5000
-	If Not GetIsIDed($lItemID) Then IdentifyItem($aItem)
+		Sleep(20 + $ping)
+		If GetIsIdentified($lItemPtr) Then Return True ; NOTE: We use a ptr here because we don't want a stale DLLStruct
+	Until TimerDiff($lDeadlock) > $lTimeout
+	Return False
 EndFunc   ;==>IdentifyItem
 
 ;~ Description: Identifies all items in a bag.
 Func IdentifyBag($aBag, $aWhites = False, $aGolds = True)
-	Local $lItem
-	If Not IsDllStruct($aBag) Then $aBag = GetBag($aBag)
-	For $i = 1 To DllStructGetData($aBag, 'Slots')
+	$aBag = GetBag($aBag)
+	Local $lItem,$lRarity
+	For $i = 1 To GetBagProperty($aBag, 'Slots')
 		$lItem = GetItemBySlot($aBag, $i)
-		If DllStructGetData($lItem, 'ID') == 0 Then ContinueLoop
-		If GetRarity($lItem) == 2621 And $aWhites == False Then ContinueLoop
-		If GetRarity($lItem) == 2624 And $aGolds == False Then ContinueLoop
+		If GetItemProperty($lItem, 'ID') == 0 Then ContinueLoop
+		$lRarity = GetRarity($lItem)
+		If $lRarity == 2621 And $aWhites == False Then ContinueLoop
+		If $lRarity == 2624 And $aGolds == False Then ContinueLoop
 		IdentifyItem($lItem)
-		Sleep(GetPing())
+		RndSleep(GetPing())
 	Next
 EndFunc   ;==>IdentifyBag
 
@@ -2234,7 +2229,7 @@ Func GetBagProperty($aBag,$aPropertyName, $aNoCache = False) ;~ Description: Fet
 	If IsPtr($aBag) Then
 		Local $aStructElementInfo = Eval('mBagStructInfo_'&$aPropertyName)
 		If Not IsArray($aStructElementInfo) Then Return ; Invalid property name.
-		Return MemoryRead($aItem + $aStructElementInfo[1],$aStructElementInfo[0])
+		Return MemoryRead($aBag + $aStructElementInfo[1],$aStructElementInfo[0])
 	EndIf
 EndFunc
 Func GetItemUses($aItem) ;~ Description: Returns uses left for ID kit or salvage kits. Any other item returns the quantity value.
@@ -2326,7 +2321,9 @@ Func GetItemBySlot($aBag, $aSlot) ;~ Description: Returns item by slot.
 	Return GetItemByPtr(MemoryRead($lItemArrayPtr + 4 * ($aSlot - 1),'ptr'))
 EndFunc   ;==>GetItemBySlot
 Func GetItemPtr($aItem) ;~ Description: Returns item ptr - used internally
-	Local $lOffset[5] = [0, 0x18, 0x40, 0xB8, 0x4 * $aItem], 
+	If IsPtr($aItem) Then Return $aItem
+	If IsDllStruct($aItem) Then $aItem = GetItemProperty($aItem,'ID')
+	Local $lOffset[5] = [0, 0x18, 0x40, 0xB8, 0x4 * $aItem]
 	Local $lItemPtr = MemoryReadPtr($mBasePointer, $lOffset,'ptr')
 	Return $lItemPtr[1]
 EndFunc
