@@ -2244,8 +2244,8 @@ EndFunc   ;==>GetMaxImperialFaction
 #EndRegion Faction
 
 #Region Item
-Func GetItemProperty($aItem,$aPropertyName) ;~ Description: Fetch property of an item, either ptr or dllstruct.
-	If IsNumber($aItem) Then $aItem = GetItemPtr($aItem) ; Pointer based - no need to load whole struct into memory for 1 value
+Func GetItemProperty($aItem,$aPropertyName, $aNoCache = False) ;~ Description: Fetch property of an item, either ptr or dllstruct. $aNoCache will force a memory read for that value.
+	If IsNumber($aItem) Or $aRefresh Then $aItem = GetItemPtr(GetItemID($aItem)) ; Pointer based - no need to load whole struct into memory for 1 value
 	If IsDllStruct($aItem) Then Return DllStructGetData($aItem,$aPropertyName)
 	If IsPtr($aItem) Then
 		Local $aStructElementInfo = Eval('mItemStructInfo_'&$aPropertyName)
@@ -2253,8 +2253,8 @@ Func GetItemProperty($aItem,$aPropertyName) ;~ Description: Fetch property of an
 		Return MemoryRead($aItem + $aStructElementInfo[1],$aStructElementInfo[0])
 	EndIf
 EndFunc
-Func GetBagProperty($aBag,$aPropertyName) ;~ Description: Fetch property of an item, either ptr or dllstruct.
-	If IsNumber($aBag) Then $aItem = GetBagPtr($aBag) ; Pointer based - no need to load whole struct into memory for 1 value
+Func GetBagProperty($aBag,$aPropertyName, $aNoCache = False) ;~ Description: Fetch property of an item, either ptr or dllstruct. $aNoCache will force a memory read for that value.
+	If IsNumber($aBag) Or $aNoCache Then $aItem = GetBagPtr($aBag) ; Pointer based - no need to load whole struct into memory for 1 value
 	If IsDllStruct($aBag) Then Return DllStructGetData($aBag,$aPropertyName)
 	If IsPtr($aBag) Then
 		Local $aStructElementInfo = Eval('mBagStructInfo_'&$aPropertyName)
@@ -2512,11 +2512,8 @@ EndFunc   ;==>GetIsHeroSkillSlotDisabled
 #EndRegion H&H
 
 #Region Agent
-Func GetAgentProperty($aAgent,$aPropertyName) ;~ Description: Fetch property of an agent, either ptr or dllstruct.
-	If IsNumber($aAgent) Then 
-		If $aPropertyName = 'ID' Then Return ConvertID($aAgent)
-		$aItem = GetAgentPtr($aAgent) ; Pointer based - no need to load whole struct into memory for 1 value
-	EndIf
+Func GetAgentProperty($aAgent,$aPropertyName, $aNoCache = False) ;~ Description: Fetch property of an agent, either ptr or dllstruct. $aNoCache will force a memory read for that value.
+	If IsNumber($aAgent) Or $aNoCache Then $aItem = GetAgentPtr($aAgent) ; Pointer based - no need to load whole struct into memory for 1 value
 	If IsDllStruct($aAgent) Then Return DllStructGetData($aAgent,$aPropertyName)
 	If IsPtr($aAgent) Then
 		Local $aStructElementInfo = Eval('mAgentStructInfo_'&$aPropertyName)
