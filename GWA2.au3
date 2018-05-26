@@ -1000,7 +1000,7 @@ Func ChangeGold($aCharacter, $aStorage) ;~ Description: Internal use for moving 
 	SendPacket(0xC, $ChangeGoldHeader, $aCharacter, $aStorage)
 	Local $lDeadlock = TimerInit(), $lTimeout = 3000 + GetPing()
 	Do
-		Sleep(50) ; Wait until gold has changed.
+		Sleep(20) ; Wait until gold has changed.
 		If $lStartAmount <> GetGoldCharacter() Then Return True
 	Until TimerDiff($lDeadlock) > $lTimeout
 	Return False
@@ -1035,8 +1035,7 @@ EndFunc   ;==>KickNpc
 
 ;~ Description: Clear the position flag from a hero.
 Func CancelHero($aHeroNumber)
-	Local $lAgentID = GetHeroID($aHeroNumber)
-	Return SendPacket(0x14, $CommandHeroHeader, $lAgentID, 0x7F800000, 0x7F800000, 0)
+	Return SendPacket(0x14, $CommandHeroHeader, GetHeroID($aHeroNumber), 0x7F800000, 0x7F800000, 0)
 EndFunc   ;==>CancelHero
 
 ;~ Description: Clear the position flag from all heroes.
@@ -1056,8 +1055,7 @@ EndFunc   ;==>CommandAll
 
 ;~ Description: Lock a hero onto a target.
 Func LockHeroTarget($aHeroNumber, $aAgentID = 0) ;$aAgentID=0 Cancels Lock
-	Local $lHeroID = GetHeroID($aHeroNumber)
-	Return SendPacket(0xC, $LockHeroTargetHeader, $lHeroID, $aAgentID)
+	Return SendPacket(0xC, $LockHeroTargetHeader, GetHeroID($aHeroNumber), $aAgentID)
 EndFunc   ;==>LockHeroTarget
 
 ;~ Description: Change a hero's aggression level.
@@ -1083,41 +1081,26 @@ EndFunc   ;==>ChangeHeroSkillSlotState
 
 ;~ Description: Order a hero to use a skill.
 Func UseHeroSkill($aHero, $aSkillSlot, $aTarget = 0)
-	Local $lTargetID
-
-	If IsDllStruct($aTarget) = 0 Then
-		$lTargetID = ConvertID($aTarget)
-	Else
-		$lTargetID = DllStructGetData($aTarget, 'ID')
-	EndIf
-
 	DllStructSetData($mUseHeroSkill, 2, GetHeroID($aHero))
-	DllStructSetData($mUseHeroSkill, 3, $lTargetID)
+	DllStructSetData($mUseHeroSkill, 3, GetAgentID($aTarget))
 	DllStructSetData($mUseHeroSkill, 4, $aSkillSlot - 1)
 	Enqueue($mUseHeroSkillPtr, 16)
 EndFunc   ;==>UseHeroSkill
 
 Func SetDisplayedTitle($aTitle = 0)
-	If $aTitle Then
-		Return SendPacket(0x8, $SetDisplayedTitleHeader, $aTitle)
-	Else
-		Return SendPacket(0x4, $RemoveDisplayedTitleHeader)
-	EndIf
+	If $aTitle Then Return SendPacket(0x8, $SetDisplayedTitleHeader, $aTitle)
+	Return SendPacket(0x4, $RemoveDisplayedTitleHeader)
 EndFunc   ;==>SetDisplayedTitle
 #EndRegion H&H
 
 #Region Movement
 ;~ Description: Move to a location.
 Func Move($aX, $aY, $aRandom = 50)
-	;returns true if successful
-	If GetAgentExists(-2) Then
-		DllStructSetData($mMove, 2, $aX + Random(-$aRandom, $aRandom))
-		DllStructSetData($mMove, 3, $aY + Random(-$aRandom, $aRandom))
-		Enqueue($mMovePtr, 16)
-		Return True
-	Else
-		Return False
-	EndIf
+	If Not GetAgentExists(-2) Then Return False
+	DllStructSetData($mMove, 2, $aX + Random(-$aRandom, $aRandom))
+	DllStructSetData($mMove, 3, $aY + Random(-$aRandom, $aRandom))
+	Enqueue($mMovePtr, 16)
+	Return True
 EndFunc   ;==>Move
 
 ;~ Description: Move to a location and wait until you reach it.
@@ -2237,7 +2220,7 @@ EndFunc   ;==>GetMaxImperialFaction
 
 #Region Item
 Func GetItemProperty($aItem,$aPropertyName, $aNoCache = False) ;~ Description: Fetch property of an item, either ptr or dllstruct. $aNoCache will force a memory read for that value.
-	If IsNumber($aItem) Or $aRefresh Then $aItem = GetItemPtr(GetItemID($aItem)) ; Pointer based - no need to load whole struct into memory for 1 value
+	If IsNumber($aItem) Or $aNoCache Then $aItem = GetItemPtr(GetItemID($aItem)) ; Pointer based - no need to load whole struct into memory for 1 value
 	If IsDllStruct($aItem) Then Return DllStructGetData($aItem,$aPropertyName)
 	If IsPtr($aItem) Then
 		Local $aStructElementInfo = Eval('mItemStructInfo_'&$aPropertyName)
