@@ -2778,6 +2778,7 @@ Func GetAgentMoveXY($aAgent = -2) ;~ Description: Get Agent MoveX and MoveY valu
 	Return $xy
 EndFunc
 Func GetAgentID($aAgent) ;~ Description: Returns the ID of an agent.
+	If IsNumber($aAgent) Then Return ConvertID($aAgent)
 	Return GetAgentProperty($aAgent,'ID')
 EndFunc
 Func GetIsLiving($aAgent = -2) ;~ Description: Tests if an agent is living.
