@@ -762,17 +762,19 @@ EndFunc   ;==>SalvageMod
 
 
 Func IdentifyItem($aItem,$aIDKit=0) ;~ Description: Identifies an item. Pass ID Kit to explicitly use. returns True on success, False on failure.
-	$aItem = GetItemByItemID($aItem)
-	Local $isIDed = GetIsIdentified($aItem)
-	If $isIDed Then Return $isIDed ; Already Identified?
-	If Not $aIDKit Then $aIDKit = FindIDKit()
-	If Not $aIDKit Then Return False
+	Local $lItemPtr = GetItemPtr($aItem), $lItemStruct = GetItemByPtr($lItemPtr), $lIDKit = $aIDKit
+	If GetIsIdentified($lItemStruct) Then Return True ; Already Identified?
+	If Not $lIDKit Then $lIDKit = FindIDKit()
+	If Not $lIDKit Then Return False
 	Local $ping = GetPing()
-	SendPacket(0xC, $IdentifyItemHeader, GetItemProperty($aIDKit,'ID'),  GetItemProperty($aItem,'ID'))
-	Local $lDeadlock = TimerInit(), $lTimeout = 5000 + $ping, $lItemPtr = GetItemPtr($aItem)
+	SendPacket(0xC, $IdentifyItemHeader, GetItemProperty($lIDKit,'ID'),  GetItemProperty($lItemStruct,'ID'))
+	Local $lDeadlock = TimerInit(), $lTimeout = 5000 + $ping
 	Do
 		Sleep(20 + $ping)
-		If GetIsIdentified($lItemPtr) Then Return True ; NOTE: We use a ptr here because we don't want a stale DLLStruct
+		If Not GetIsIdentified($lItemPtr) Then ContinueLoop ; Not identified... yet
+		If IsDllStruct($aItem) Then RefreshItemStruct($aItem,$lItemPtr) ; Refresh item struct for further scripts
+		If IsDllStruct($aIDKit) Then RefreshItemStruct($aIDKit) ; Refresh ID Kit struct for further scripts
+		Return True
 	Until TimerDiff($lDeadlock) > $lTimeout
 	Return False
 EndFunc   ;==>IdentifyItem
@@ -788,7 +790,6 @@ Func IdentifyBag($aBag, $aWhites = False, $aGolds = True)
 		If $lRarity == 2621 And $aWhites == False Then ContinueLoop
 		If $lRarity == 2624 And $aGolds == False Then ContinueLoop
 		IdentifyItem($lItem)
-		RndSleep(GetPing())
 	Next
 EndFunc   ;==>IdentifyBag
 
@@ -822,9 +823,26 @@ Func DropItem($aItem, $aAmount = 0) ;~ Description: Drops an item.
 	If IsNumber($aItem) Then $aItem = GetItemByItemID($aItem)
 	Return SendPacket(0xC, $DropItemHeader, GetItemProperty($aItem,'ID'), $aAmount ? $aAmount : GetItemProperty($aItem,'Quantity'))
 EndFunc   ;==>DropItem
-Func MoveItem($aItem, $aBag, $aSlot) ;~ Description: Moves an item.
-	Return SendPacket(0x10, $MoveItemHeader, GetItemProperty($aItem,'ID'), GetBagProperty($aBag,'ID'), $aSlot - 1)
-EndFunc   ;==>MoveItem
+Func MoveItem($aItem, $aBag, $aSlot, $aAmount=0) ;~ Description: Moves an item. Waits until complete, or timeout. Returns True on success.
+	Local $lItemPtr = GetItemPtr($aItem), $lItemStruct = GetItemByPtr($lItemPtr), $lQuantity = GetItemProperty($lItemStruct,'Quantity'), $lBagPtr = GetBagPtr($aBag), $lBagStruct = GetBag($lBagPtr)
+	If $lItemStruct = 0 Or $lBagStruct = 0 Then Return False ; Invalid item or bag
+	If Not $aAmount Or $aAmount > $lQuantity Then $aAmount = $lQuantity
+	If $aAmount >= $lQuantity Then ; Move Item i.e. User drags whole stack/item to other slot.
+		SendPacket(0x10, $MoveItemHeader, GetItemProperty($lItemStruct,'ID'), GetBagProperty($lBagStruct,'ID'), $aSlot - 1)
+	Else  ; Split stack i.e. User does CTRL + drag.
+		SendPacket(0x14, $MoveItemExHeader, GetItemProperty($lItemStruct,'ID'), $aAmount, GetBagProperty($lBagStruct,'ID'), $aSlot - 1)
+	EndIf
+	Local $lDeadlock = TimerInit(), $lPing = GetPing(), $lTimeout = 5000 + $lPing, $lFromSlot = GetItemProperty($lItemStruct,'Slot'), $lFromBag = GetItemProperty($lItemStruct,'Bag')
+	Do 
+		Sleep(20 + $lPing)
+		RefreshItemStruct($lItemStruct,$lItemPtr) ; Refresh Item struct to avoid stale object.
+		If GetItemProperty($lItemStruct,'Quantity') <> $lQuantity Or GetItemProperty($lItemStruct,'Slot') <> $lFromSlot Or GetItemProperty($lItemStruct,'Bag') <> $lFromBag Then 
+			If IsDllStruct($aItem) Then RefreshItemStruct($aItem,$lItemPtr) ; Refresh passed struct object to reflect bag/qty change.
+			Return True
+		EndIf
+	Until TimerDiff($lDeadlock) > $lTimeout ; Wait until the move has completed.
+	Return False ; Got this far, timeout reached.
+EndFunc
 Func AcceptAllItems() ;~ Description: Accepts unclaimed items after a mission.
 	Return SendPacket(0x8, $AcceptAllItemsHeader, GetBagProperty(7, 'ID'))
 EndFunc   ;==>AcceptAllItems
@@ -835,7 +853,14 @@ Func SellItem($aItem, $aQuantity = 0) ;~ Description: Sells an item.
 
 	DllStructSetData($mSellItem, 2, $aQuantity * GetItemProperty($aItem, 'Value'))
 	DllStructSetData($mSellItem, 3, GetItemProperty($aItem, 'ID'))
+	Local $lStartAmount = GetGoldCharacter()
 	Enqueue($mSellItemPtr, 12)
+	Local $lDeadlock = TimerInit(), $lPing = GetPing(), $lTimeout = 3000 + $lPing
+	Do
+		Sleep(20 + $lPing) ; Wait until gold has changed.
+		If $lStartAmount <> GetGoldCharacter() Then Return True
+	Until TimerDiff($lDeadlock) > $lTimeout
+	Return False
 EndFunc   ;==>SellItem
 
 ;~ Description: Buys an item.
@@ -848,7 +873,14 @@ Func BuyItem($aItem, $aQuantity, $aValue)
 	DllStructSetData($mBuyItem, 2, $aQuantity)
 	DllStructSetData($mBuyItem, 3, MemoryRead($lMerchantItemsBase + 4 * ($aItem - 1)))
 	DllStructSetData($mBuyItem, 4, $aQuantity * $aValue)
+	Local $lStartAmount = GetGoldCharacter()
 	Enqueue($mBuyItemPtr, 16)
+	Local $lDeadlock = TimerInit(), $lPing = GetPing(), $lTimeout = 3000 + $lPing
+	Do
+		Sleep(20 + $lPing) ; Wait until gold has changed.
+		If $lStartAmount <> GetGoldCharacter() Then Return True
+	Until TimerDiff($lDeadlock) > $lTimeout
+	Return False
 EndFunc   ;==>BuyItem
 
 ;~ Description: Legacy function, use BuyIdentificationKit instead.
@@ -903,9 +935,9 @@ Func TraderRequest($aModelID, $aExtraID = -1)
 	DllStructSetData($mRequestQuote, 2, GetItemProperty($lItemStruct, 'ID'))
 	Enqueue($mRequestQuotePtr, 8)
 
-	Local $lDeadlock = TimerInit(), $lTimeout = GetPing() + 5000
+	Local $lDeadlock = TimerInit(), $lPing = GetPing(), $lTimeout = 3000 + $lPing
 	Do
-		Sleep(20)
+		Sleep(20 + $lPing)
 		If MemoryRead($mTraderQuoteID) <> $lQuoteID Then Return True
 	Until TimerDiff($lDeadlock) > $lTimeout
 	Return False
@@ -916,9 +948,9 @@ Func TraderBuy()
 	If Not GetTraderCostID() Or Not GetTraderCostValue() Then Return False
 	Local $lStartAmount = GetGoldCharacter()
 	Enqueue($mTraderBuyPtr, 4)
-	Local $lDeadlock = TimerInit(), $lTimeout = 3000 + GetPing()
+	Local $lDeadlock = TimerInit(), $lPing = GetPing(), $lTimeout = 3000 + $lPing
 	Do
-		Sleep(20) ; Wait until gold has changed.
+		Sleep(20 + $lPing) ; Wait until gold has changed.
 		If $lStartAmount <> GetGoldCharacter() Then Return True
 	Until TimerDiff($lDeadlock) > $lTimeout
 	Return False
@@ -930,9 +962,9 @@ Func TraderRequestSell($aItem)
 	DllStructSetData($mRequestQuoteSell, 2, GetItemID($aItem))
 	Enqueue($mRequestQuoteSellPtr, 8)
 
-	Local $lDeadlock = TimerInit(), $lTimeout = GetPing() + 5000
+	Local $lDeadlock = TimerInit(), $lPing = GetPing(), $lTimeout = 3000 + $lPing
 	Do
-		Sleep(20)
+		Sleep(20 + $lPing)
 		If MemoryRead($mTraderQuoteID) <> $lQuoteID Then Return True
 	Until TimerDiff($lDeadlock) > $lTimeout
 	Return False
@@ -943,59 +975,35 @@ Func TraderSell()
 	If Not GetTraderCostID() Or Not GetTraderCostValue() Then Return False
 	Local $lStartAmount = GetGoldCharacter()
 	Enqueue($mTraderSellPtr, 4)
-	Local $lDeadlock = TimerInit(), $lTimeout = 3000 + GetPing()
+	Local $lDeadlock = TimerInit(), $lPing = GetPing(), $lTimeout = 3000 + $lPing
 	Do
-		Sleep(20) ; Wait until gold has changed.
+		Sleep(20 + $lPing) ; Wait until gold has changed.
 		If $lStartAmount <> GetGoldCharacter() Then Return True
 	Until TimerDiff($lDeadlock) > $lTimeout
 	Return False
 EndFunc   ;==>TraderSell
-
-;~ Description: Drop gold on the ground.
-Func DropGold($aAmount = 0)
+Func DropGold($aAmount = 0) ;~ Description: Drop gold on the ground.
 	Return SendPacket(0x8, $DropGoldHeader, $aAmount)
 EndFunc   ;==>DropGold
-
-;~ Description: Deposit gold into storage.
-Func DepositGold($aAmount = 0)
-	Local $lAmount
-	Local $lStorage = GetGoldStorage()
-	Local $lCharacter = GetGoldCharacter()
-
-	If $aAmount > 0 And $lCharacter >= $aAmount Then
-		$lAmount = $aAmount
-	Else
-		$lAmount = $lCharacter
-	EndIf
-
-	If $lStorage + $lAmount > 1000000 Then $lAmount = 1000000 - $lStorage
-
-	ChangeGold($lCharacter - $lAmount, $lStorage + $lAmount)
+Func DepositGold($aAmount = 0) ;~ Description: Deposit gold into storage.
+	Local $lStorage = GetGoldStorage(), $lCharacter = GetGoldCharacter()
+	If $aAmount < 1 Or $lCharacter < $aAmount Then $aAmont = $lCharacter
+	If $lStorage + $aAmount > 1000000 Then $aAmount = 1000000 - $lStorage
+	Return ChangeGold($lCharacter - $aAmount, $lStorage + $aAmount)
 EndFunc   ;==>DepositGold
-
-;~ Description: Withdraw gold from storage.
-Func WithdrawGold($aAmount = 0)
-	Local $lAmount
-	Local $lStorage = GetGoldStorage()
-	Local $lCharacter = GetGoldCharacter()
-
-	If $aAmount > 0 And $lStorage >= $aAmount Then
-		$lAmount = $aAmount
-	Else
-		$lAmount = $lStorage
-	EndIf
-
-	If $lCharacter + $lAmount > 100000 Then $lAmount = 100000 - $lCharacter
-
-	ChangeGold($lCharacter + $lAmount, $lStorage - $lAmount)
+Func WithdrawGold($aAmount = 0) ;~ Description: Withdraw gold from storage.
+	Local $lStorage = GetGoldStorage(), $lCharacter = GetGoldCharacter()
+	If $aAmount < 1 Or $lStorage < $aAmount Then $aAmont = $lStorage
+	If $lCharacter + $aAmount > 100000 Then $aAmount = 100000 - $lCharacter
+	Return ChangeGold($lCharacter + $aAmount, $lStorage - $aAmount)
 EndFunc   ;==>WithdrawGold
 Func ChangeGold($aCharacter, $aStorage) ;~ Description: Internal use for moving gold. Added a wait mechanism.
 	Local $lStartAmount = GetGoldCharacter()
 	If $lStartAmount == $aCharacter Then Return True ; No gold change.
 	SendPacket(0xC, $ChangeGoldHeader, $aCharacter, $aStorage)
-	Local $lDeadlock = TimerInit(), $lTimeout = 3000 + GetPing()
+	Local $lDeadlock = TimerInit(), $lPing = GetPing(), $lTimeout = 3000 + $lPing
 	Do
-		Sleep(20) ; Wait until gold has changed.
+		Sleep(20 + $lPing) ; Wait until gold has changed.
 		If $lStartAmount <> GetGoldCharacter() Then Return True
 	Until TimerDiff($lDeadlock) > $lTimeout
 	Return False
@@ -2277,7 +2285,7 @@ Func GetModByIdentifier($aItem, $aIdentifier) ;~ Description: Returns an array o
 	Local $lReturn[2]
 	Local $lString = StringTrimLeft(GetModStruct($aItem), 2)
 	For $i = 0 To StringLen($lString) / 8 - 2
-		StringMid($lString, 8 * $i + 5, 4) <> $aIdentifier Then ContinueLoop
+		If StringMid($lString, 8 * $i + 5, 4) <> $aIdentifier Then ContinueLoop
 		$lReturn[0] = Int("0x" & StringMid($lString, 8 * $i + 1, 2))
 		$lReturn[1] = Int("0x" & StringMid($lString, 8 * $i + 3, 2))
 		ExitLoop
@@ -2307,7 +2315,7 @@ Func GetBagPtr($aBag) ;~ Description: Returns ptr of an inventory bag.
 	If IsPtr($aBag) Then Return $aBag
 	If IsDllStruct($aBag) Then $aBag = GetBagProperty($aBag,'Index')
 	Local $lOffset[5] = [0, 0x18, 0x40, 0xF8, 0x4 * $aBag]
-	Local $lBagPtr = MemoryReadPtr($mBasePointer, $lOffset)
+	Local $lBagPtr = MemoryReadPtr($mBasePointer, $lOffset,'ptr')
 	Return $lBagPtr[1]
 EndFunc
 Func GetBag($aBag) ;~ Description: Returns struct of an inventory bag.
@@ -2320,6 +2328,10 @@ Func GetItemBySlot($aBag, $aSlot) ;~ Description: Returns item by slot.
 	Local $lItemArrayPtr = GetBagProperty($aBag,'ItemArray')
 	Return GetItemByPtr(MemoryRead($lItemArrayPtr + 4 * ($aSlot - 1),'ptr'))
 EndFunc   ;==>GetItemBySlot
+Func RefreshItemStruct($aItemStruct,$aItemPtr=0) ;~ Description: Recycles an existing DllStruct to re-fetch item details from memory. Good for avoiding stale Structs. Pass pointer to avoid having to grab it again.
+	If Not IsDllStruct($aItemStruct) Then Return True ; Ignore if not already DllStruct, return True
+	Return MemoryReadStruct($aItemPtr ? $aItemPtr : GetItemPtr($aItemStruct),$aItemStruct) <> 0 ; Returns boolean
+EndFunc
 Func GetItemPtr($aItem) ;~ Description: Returns item ptr - used internally
 	If IsPtr($aItem) Then Return $aItem
 	If IsDllStruct($aItem) Then $aItem = GetItemProperty($aItem,'ID')
@@ -2334,8 +2346,9 @@ Func GetItemBy($aPropertyName,$aPropertyValue) ; Returns item by property value 
 		If $lItem And GetItemProperty($lItem,$aPropertyName) == $aPropertyValue Then Return $lItem
 	Next
 EndFunc
-Func GetItemByItemID($aItemID) ;~ Description: Returns item struct.
-	Return GetItemByPtr(GetItemPtr($aItemID))
+Func GetItemByItemID($aItemID,$aExistingStructToUse=0) ;~ Description: Returns item struct. Pass $aExistingStructToUse to load the data into the given struct.
+	If IsDllStruct($aItemID) And $aExistingStructToUse = 0 Then Return $aItemID ; Already a struct, presume item struct.
+	Return GetItemByPtr(GetItemPtr($aItemID),$aExistingStructToUse)
 EndFunc   ;==>GetItemByItemID
 Func GetItemByAgentID($aAgentID) ;~ Description: Returns item by agent ID. Legacy function, use GetItemBy() instead
 	Return GetItemBy('AgentID',$aAgentID)
