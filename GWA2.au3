@@ -63,6 +63,7 @@ Local $mTraderCostValue
 Local $mDisableRendering
 Local $mAgentCopyCount
 Local $mAgentCopyBase
+Local $mCharslots
 #EndRegion Declarations
 
 #Region ObjectStructInfo
@@ -182,6 +183,7 @@ $UseItemHeader = 0x83
 $PickUpItemHeader = 0x45
 $DropItemHeader = 0x32
 $MoveItemHeader = 0x77
+$MoveItemExHeader = $MoveItemHeader + 0x3
 $AcceptAllItemsHeader = 0x78
 $DropGoldHeader = 0x35
 $ChangeGoldHeader = 0x81
@@ -362,7 +364,7 @@ Func Initialize($aGW, $bChangeTitle = True, $notUsed1 = 0, $notUsed2 = 0)
 	$mMapLoading = $mAgentBase - 240
 	$mCurrentTarget = $mAgentBase - 1280
 	SetValue('PacketLocation', '0x' & Hex(MemoryRead(GetScannedAddress('ScanBaseOffset', -3)), 8))
-	$mPing = MemoryRead(GetScannedAddress('ScanPing', -8))
+	$mPing = MemoryRead(GetScannedAddress('ScanPing', 7))
 	$mMapID = MemoryRead(GetScannedAddress('ScanMapID', 71))
 	$mLoggedIn = MemoryRead(GetScannedAddress('ScanLoggedIn', -3)) + 4
 	$mRegion = MemoryRead(GetScannedAddress('ScanRegion', 8))
@@ -372,7 +374,8 @@ Func Initialize($aGW, $bChangeTitle = True, $notUsed1 = 0, $notUsed2 = 0)
 	$mBuildNumber = MemoryRead(GetScannedAddress('ScanBuildNumber', 0x54))
 	$mZoomStill = GetScannedAddress("ScanZoomStill", -1)
 	$mZoomMoving = GetScannedAddress("ScanZoomMoving", 5)
-	$mCurrentStatus = MemoryRead(GetScannedAddress('ScanChangeStatusFunction', 33))
+	$mCurrentStatus = MemoryRead(GetScannedAddress('ScanChangeStatusFunction', -3))
+	$mCharslots = MemoryRead(GetScannedAddress('ScanCharslots', 22))
 
 	Local $lTemp
 	$lTemp = GetScannedAddress('ScanEngine', -16)
@@ -423,7 +426,7 @@ Func Initialize($aGW, $bChangeTitle = True, $notUsed1 = 0, $notUsed2 = 0)
 	SetValue('RequestQuoteFunction', '0x' & Hex(GetScannedAddress('ScanRequestQuoteFunction', -2), 8))
 	SetValue('TraderFunction', '0x' & Hex(GetScannedAddress('ScanTraderFunction', -71), 8))
 	SetValue('ClickToMoveFix', '0x' & Hex(GetScannedAddress("ScanClickToMoveFix", 30), 8))
-	SetValue('ChangeStatusFunction', '0x' & Hex(GetScannedAddress("ScanChangeStatusFunction", 1), 8))
+	SetValue('ChangeStatusFunction', '0x' & Hex(GetScannedAddress("ScanChangeStatusFunction", 12), 8))
 
 	SetValue('QueueSize', '0x00000010')
 	SetValue('SkillLogSize', '0x00000010')
@@ -518,7 +521,7 @@ Func Scan()
 	_('ScanMoveFunction:')
 	AddPattern('558BEC83EC2056578BF98D4DF0')
 	_('ScanPing:')
-	AddPattern('908D41248B49186A30')
+	AddPattern('C390908BD1B9')
 	_('ScanMapID:')
 	AddPattern('B07F8D55')
 	_('ScanLoggedIn:')
@@ -586,7 +589,9 @@ Func Scan()
 	_('ScanBuildNumber:')
 	AddPattern('8D8500FCFFFF8D')
 	_('ScanChangeStatusFunction:')
-	AddPattern('568BF183FE047C146811020000')
+	AddPattern('C390909090909090909090568BF183FE04')
+	_('ScanCharslots:')
+	AddPattern('8B551041897E38897E3C897E34897E48897E4C890D')
 
 	_('ScanProc:')
 	_('pushad')
@@ -1943,10 +1948,9 @@ EndFunc   ;==>SetMaxMemory
 
 #Region Online Status
  ;~ Description: Change online status. 0 = Offline, 1 = Online, 2 = Do not disturb, 3 = Away
- Func SetPlayerStatus($iStatus)
-    If (($iStatus >= 0 And $iStatus <= 3) And (GetPlayerStatus() <> $iStatus)) Then
-        DllStructSetData($mChangeStatus, 2, $iStatus)
-
+ Func SetPlayerStatus($aStatus)
+    If ($aStatus >= 0 And $aStatus <= 3) And GetPlayerStatus() <> $aStatus Then
+        DllStructSetData($mChangeStatus, 2, $aStatus)
         Enqueue($mChangeStatusPtr, 8)
         Return True
     Else
@@ -3201,6 +3205,11 @@ Func GetLoggedIn()
 	Return MemoryRead($mLoggedIn)
 EndFunc   ;==>GetLoggedIn
 
+;~ Description: Returns the number of character slots you have. Only works on character select.
+Func GetCharacterSlots()
+	Return MemoryRead($mCharslots)
+EndFunc   ;==>GetLoggedIn
+
 ;~ Description: Returns language currently being used.
 Func GetDisplayLanguage()
 	Local $lOffset[6] = [0, 0x18, 0x18, 0x194, 0x4C, 0x40]
@@ -4316,10 +4325,10 @@ Func CreateCommands()
 	_('mov dword[AgentCopyCount],edx')
 	_('ljmp CommandReturn')
 
-    _('CommandChangeStatus:')
-    _('mov ecx,dword[eax+4]')
-    _('call ChangeStatusFunction')
-    _('ljmp CommandReturn')
+	_('CommandChangeStatus:')
+	_('mov ecx,dword[eax+4]')
+	_('call ChangeStatusFunction')
+	_('ljmp CommandReturn')
 EndFunc   ;==>CreateCommands
 #EndRegion Modification
 
