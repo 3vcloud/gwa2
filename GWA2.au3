@@ -1,5 +1,5 @@
 Local $mGWA2Version = '4.0.0' ; GWA2 Version
-; Stability for buying and selling, code cleanup and loads of other features.
+; Stability for buying/selling/gold changes, pointer management to avoid stale checks, code cleanup and loads of other features.
 ; -- Jon, 2018-06-04
 
 #include-once
