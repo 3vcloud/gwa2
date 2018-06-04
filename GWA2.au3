@@ -1008,12 +1008,12 @@ Func TraderRequestSell($aItem) ;~ Description: Request a quote to sell an item t
 	Local $lQuoteID = MemoryRead($mTraderQuoteID)
 	DllStructSetData($mRequestQuoteSell, 2, GetItemProperty($aItem,'ID'))
 	Enqueue($mRequestQuoteSellPtr, 8)
-	Local $lDeadlock = TimerInit(), $lPing = GetPing(), $lTimeout = 3000 + $lPing, $lNewQuoteID
+	Local $lDeadlock = TimerInit(), $lPing = GetPing(), $lTimeout = 3000 + $lPing, $lSuccess = False
 	Do
 		Sleep(20 + $lPing)
-		$lNewQuoteID = MemoryRead($mTraderQuoteID)
-	Until $lNewQuoteID <> $lQuoteID Or TimerDiff($lDeadlock) > $lTimeout
-	Return $lNewQuoteID <> $lQuoteID And GetTraderCostValue() > 0
+		$lSuccess = $lQuoteID <> MemoryRead($mTraderQuoteID)
+	Until $lSuccess Or TimerDiff($lDeadlock) > $lTimeout
+	Return $lSuccess And GetTraderCostValue() > 0
 EndFunc   ;==>TraderRequestSell
 
 ;~ Description: ID of the item item being sold.
@@ -2025,7 +2025,7 @@ Func GetItemPtr($aItem) ;~ Description: Returns item ptr - used internally
 	Return MemoryRead(GetItemsBasePtr() + (0x4 * $aItem),'ptr')
 EndFunc
 Func GetItemHasUpgrades($aItemID)
-	Return GetRarity($aItemID) > 2621 And StringRegExp(GetModStruct($aItemID),"3225|3025")
+	Return GetRarity($aItemID) > 2621 And StringRegExp(GetModStruct($aItemID),"32[2A]5|3025")
 EndFunc
 Func GetItemBy($aPropertyName,$aPropertyValue) ; Returns item by property value - used internally.
 	If $aPropertyValue = 0 Then Return 0
