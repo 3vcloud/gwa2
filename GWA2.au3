@@ -773,7 +773,6 @@ EndFunc   ;==>ScanForCharname
 
 #Region Commands
 #Region Item
-
 Func StartSalvage($aItem, $aSalvageKit = False) ;~ Description: Starts a salvaging session of an item.
 	; If $aSalvageKit is BOOLEAN, and is TRUE, this means the user wants to start an EXPERT salvage.
 	; If $aSalvageKit does NOT evaluate to FALSE, presume this is an existing kit that the user explicitly wants to use.
@@ -2024,6 +2023,9 @@ Func GetItemPtr($aItem) ;~ Description: Returns item ptr - used internally
 	If IsDllStruct($aItem) Then $aItem = GetItemProperty($aItem,'ID')
 	If $aItem = 0 Then Return 0
 	Return MemoryRead(GetItemsBasePtr() + (0x4 * $aItem),'ptr')
+EndFunc
+Func GetItemHasUpgrades($aItemID)
+	Return GetRarity($aItemID) > 2621 And StringRegExp(GetModStruct($aItemID),"3225|3025")
 EndFunc
 Func GetItemBy($aPropertyName,$aPropertyValue) ; Returns item by property value - used internally.
 	If $aPropertyValue = 0 Then Return 0
